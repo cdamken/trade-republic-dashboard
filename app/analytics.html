@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TR Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root { 
+  --bg: #0f1419; 
+  --card: #1a1f2e; 
+  --border: #2a3142; 
+  --text: #e8eef5; 
+  --muted: #7a8599; 
+  --blue: #60a5fa; 
+  --green: #4ade80; 
+  --amber: #fbbf24; 
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+
+h1 { font-size: 28px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; font-weight: 700; }
+.logo-box { background: #fff; width: 40px; height: 40px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+
+.nav { margin-bottom: 32px; display: flex; gap: 12px; }
+.nav a { color: var(--blue); text-decoration: none; font-size: 15px; border: 1px solid var(--blue); padding: 10px 24px; border-radius: 10px; font-weight: 500; }
+.nav a.active { background: var(--blue); color: var(--bg); }
+
+.grid-top { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+.grid-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; min-height: 520px; }
+h2 { font-size: 14px; margin-bottom: 20px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
+.stat { font-size: 52px; font-weight: 800; margin-bottom: 8px; color: var(--text); }
+.substat { color: var(--muted); font-size: 16px; margin-bottom: 24px; }
+
+.chart-container { flex-grow: 1; position: relative; width: 100%; height: 350px; }
+
+table { width: 100%; border-collapse: collapse; }
+td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
+.val { text-align: right; font-weight: 700; color: var(--green); }
+.date-cell { color: var(--muted); width: 130px; }
+
+/* Cash Flow card */
+.cf-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px; margin-bottom: 24px; }
+.cf-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 24px; }
+.cf-tile { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.cf-tile .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 600; }
+.cf-tile .value { font-size: 28px; font-weight: 800; }
+.cf-tile .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.cf-tile.in .value  { color: var(--green); }
+.cf-tile.out .value { color: #f87171; }
+.cf-tile.pl-pos .value { color: var(--green); }
+.cf-tile.pl-neg .value { color: #f87171; }
+.cf-formula { color: var(--muted); font-size: 13px; padding: 12px 16px; background: rgba(96,165,250,0.06); border-left: 3px solid var(--blue); border-radius: 4px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1><div class="logo-box">📈</div> Trade Republic Analytics</h1>
+<div class="nav"><a href="index.html">Portfolio</a><a href="analytics.html" class="active">Analytics</a></div>
+
+<!-- Cash Flow (external: TR ↔ outside world) -->
+<div class="cf-card">
+  <h2>Cash Flow — Entradas y salidas del Wealth</h2>
+  <div class="cf-grid">
+    <div class="cf-tile in">
+      <div class="label">Depósitos</div>
+      <div class="value" id="cf-deposits">€0</div>
+      <div class="sub"><span id="cf-deposits-count">0</span> transacciones</div>
+    </div>
+    <div class="cf-tile in">
+      <div class="label">Reembolsos fiscales</div>
+      <div class="value" id="cf-refunds">€0</div>
+      <div class="sub"><span id="cf-refunds-count">0</span> transacciones</div>
+    </div>
+    <div class="cf-tile out">
+      <div class="label">Salidas (tarjeta TR)</div>
+      <div class="value" id="cf-removals">€0</div>
+      <div class="sub"><span id="cf-removals-count">0</span> transacciones</div>
+    </div>
+    <div class="cf-tile">
+      <div class="label">Capital neto en TR</div>
+      <div class="value" id="cf-net" style="color: var(--blue);">€0</div>
+      <div class="sub">Entradas − Salidas</div>
+    </div>
+  </div>
+  <div class="cf-grid">
+    <div class="cf-tile">
+      <div class="label">Valor actual (portfolio + cash)</div>
+      <div class="value" id="cf-current" style="color: var(--text);">€0</div>
+    </div>
+    <div class="cf-tile" id="cf-pl-tile">
+      <div class="label">Lifetime P/L</div>
+      <div class="value" id="cf-pl">€0</div>
+      <div class="sub" id="cf-pl-pct">0.00%</div>
+    </div>
+    <div class="cf-tile">
+      <div class="label">Cash flow neto mensual (avg)</div>
+      <div class="value" id="cf-avg-month" style="color: var(--text); font-size: 24px;">€0</div>
+      <div class="sub" id="cf-month-count">0 meses</div>
+    </div>
+    <div class="cf-tile">
+      <div class="label">Último depósito</div>
+      <div class="value" id="cf-last-deposit" style="color: var(--text); font-size: 20px;">—</div>
+      <div class="sub" id="cf-last-deposit-date">—</div>
+    </div>
+  </div>
+  <div class="cf-formula">
+    <strong>Net capital in TR</strong> = Depósitos + Reembolsos fiscales − Salidas con tarjeta.
+    <strong>Lifetime P/L</strong> = Valor actual − Capital neto en TR. Refleja ganancias/pérdidas reales sobre lo que realmente sigue trabajando dentro del wealth.
+  </div>
+  <div style="height: 260px; margin-top: 24px;"><canvas id="cashFlowChart"></canvas></div>
+</div>
+
+<div class="grid-top">
+  <!-- 1. Assets Allocation -->
+  <div class="card">
+    <h2>Asset Allocation</h2>
+    <div class="stat" id="alloc-total">€0.00</div>
+    <div class="substat">Current capital distribution</div>
+    <div class="chart-container"><canvas id="allocationChart"></canvas></div>
+  </div>
+  <!-- 2. Net Worth Evolution -->
+  <div class="card">
+    <h2>Net Worth Evolution</h2>
+    <div class="stat" id="history-current">€0.00</div>
+    <div class="substat">Cumulative inflow (Deposits + Earnings)</div>
+    <div class="chart-container" id="history-container">
+      <canvas id="historyChart"></canvas>
+    </div>
+  </div>
+</div>
+
+<div class="grid-bottom">
+  <!-- 3. Monthly Dividends -->
+  <div class="card">
+    <h2>Monthly Dividends</h2>
+    <div class="stat" id="div-total">€0.00</div>
+    <div class="chart-container"><canvas id="dividendChart"></canvas></div>
+  </div>
+  <!-- 4. Recent Payments -->
+  <div class="card">
+    <h2>Recent Payments</h2>
+    <div class="substat">Last 10 received items</div>
+    <table id="recent-divs"></table>
+  </div>
+</div>
+
+<script>
+const fmtEur = (n, d=2) => '€' + n.toLocaleString(undefined, {minimumFractionDigits:d, maximumFractionDigits:d});
+const fmtEur0 = (n) => '€' + n.toLocaleString(undefined, {maximumFractionDigits:0});
+
+async function init() {
+  const res = await fetch('../DATA/analytics.json?t=' + Date.now());
+  const data = await res.json();
+
+  // ============ Cash Flow ============
+  const cf = data.cash_flow || {};
+  document.getElementById('cf-deposits').textContent = fmtEur0(cf.deposits?.total || 0);
+  document.getElementById('cf-deposits-count').textContent = cf.deposits?.count || 0;
+  document.getElementById('cf-refunds').textContent = fmtEur0(cf.tax_refunds?.total || 0);
+  document.getElementById('cf-refunds-count').textContent = cf.tax_refunds?.count || 0;
+  document.getElementById('cf-removals').textContent = fmtEur0(cf.removals?.total || 0);
+  document.getElementById('cf-removals-count').textContent = cf.removals?.count || 0;
+  document.getElementById('cf-net').textContent = fmtEur0(cf.net_capital_in || 0);
+  document.getElementById('cf-current').textContent = fmtEur0(cf.current_value || 0);
+
+  const pl = cf.lifetime_pl || 0;
+  const plPct = cf.lifetime_pl_pct || 0;
+  document.getElementById('cf-pl').textContent = (pl >= 0 ? '+' : '−') + fmtEur0(Math.abs(pl));
+  document.getElementById('cf-pl-pct').textContent = (plPct >= 0 ? '+' : '') + plPct.toFixed(2) + '%';
+  document.getElementById('cf-pl-tile').classList.add(pl >= 0 ? 'pl-pos' : 'pl-neg');
+
+  const monthly = cf.monthly || [];
+  if (monthly.length > 0) {
+    const avgNet = monthly.reduce((s, m) => s + m.net_flow, 0) / monthly.length;
+    document.getElementById('cf-avg-month').textContent =
+      (avgNet >= 0 ? '+' : '−') + fmtEur0(Math.abs(avgNet));
+    document.getElementById('cf-month-count').textContent = monthly.length + ' meses';
+
+    const lastDepMonth = [...monthly].reverse().find(m => m.deposits > 0);
+    if (lastDepMonth) {
+      document.getElementById('cf-last-deposit').textContent = fmtEur0(lastDepMonth.deposits);
+      document.getElementById('cf-last-deposit-date').textContent = lastDepMonth.month;
+    }
+
+    // Stacked bars (in/out per month) + line for net flow
+    new Chart(document.getElementById('cashFlowChart'), {
+      type: 'bar',
+      data: {
+        labels: monthly.map(m => m.month),
+        datasets: [
+          { label: 'Depósitos', data: monthly.map(m => m.deposits), backgroundColor: '#4ade80', borderRadius: 4, stack: 'in' },
+          { label: 'Reembolsos', data: monthly.map(m => m.tax_refunds), backgroundColor: '#60a5fa', borderRadius: 4, stack: 'in' },
+          { label: 'Salidas tarjeta', data: monthly.map(m => -m.removals), backgroundColor: '#f87171', borderRadius: 4, stack: 'out' },
+          { label: 'Neto', type: 'line', data: monthly.map(m => m.net_flow), borderColor: '#fbbf24', borderWidth: 3, tension: 0.3, pointRadius: 3, fill: false },
+        ],
+      },
+      options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { labels: { color: '#e8eef5', font: { size: 12 } } } },
+        scales: {
+          y: { stacked: true, ticks: { color: '#e8eef5', callback: v => '€' + (v/1000).toFixed(1) + 'k' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+          x: { stacked: true, ticks: { color: '#7a8599', maxRotation: 45 }, grid: { display: false } },
+        },
+      },
+    });
+  }
+
+  // ============ Dividends & Allocation (existing) ============
+  document.getElementById('div-total').textContent = '€' + data.dividends.total_received.toLocaleString(undefined,{minimumFractionDigits:2});
+  document.getElementById('alloc-total').textContent = '€' + data.allocation.total.toLocaleString(undefined,{maximumFractionDigits:0});
+  
+  // 1. Allocation Chart
+  new Chart(document.getElementById('allocationChart'), {
+    type: 'doughnut',
+    data: { labels: Object.keys(data.allocation.categories), datasets: [{ data: Object.values(data.allocation.categories), backgroundColor: ['#60a5fa','#4ade80','#fbbf24','#7a8599'], borderWeight: 0 }] },
+    options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e8eef5', font: { size: 22, weight: 'bold' }, padding: 30 } } }, cutout: '65%' }
+  });
+
+  // 2. History Chart (CLEANED UP)
+  const hist = data.history;
+  if (hist && hist.length > 0) {
+    document.getElementById('history-current').textContent = '€' + hist[hist.length-1].value.toLocaleString(undefined, {minimumFractionDigits:2});
+    new Chart(document.getElementById('historyChart'), {
+      type: 'line',
+      data: { 
+        labels: hist.map(h=>h.date), 
+        datasets: [{ 
+          data: hist.map(h=>h.value), 
+          borderColor: '#60a5fa', 
+          borderWidth: 4, 
+          tension: 0.3, 
+          fill: true, 
+          backgroundColor: 'rgba(96, 165, 250, 0.05)', 
+          pointRadius: 2,
+          pointHitRadius: 10
+        }] 
+      },
+      options: { 
+        maintainAspectRatio: false, 
+        plugins: { legend: { display: false } }, 
+        scales: { 
+          y: { 
+            ticks: { color: '#e8eef5', font: { size: 24, weight: 'bold' }, padding: 15, callback: (v) => '€' + (v/1000).toFixed(0) + 'k' }, 
+            grid: { color: 'rgba(255,255,255,0.05)' }
+          }, 
+          x: { 
+            ticks: { color: '#7a8599', font: { size: 14, weight: 'bold' }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, 
+            grid: { display: false }
+          } 
+        } 
+      }
+    });
+  }
+
+  // 3. Dividend Chart
+  const divMonths = Object.keys(data.dividends.monthly).sort();
+  new Chart(document.getElementById('dividendChart'), {
+    type: 'bar',
+    data: { labels: divMonths, datasets: [{ data: divMonths.map(m=>data.dividends.monthly[m]), backgroundColor: '#4ade80', borderRadius: 8 }] },
+    options: { 
+      maintainAspectRatio: false, 
+      plugins: { legend: { display: false } },
+      scales: { 
+        y: { ticks: { color: '#e8eef5', font: { size: 16, weight: 'bold' } } },
+        x: { ticks: { color: '#7a8599', font: { size: 16, weight: 'bold' } } }
+      }
+    }
+  });
+
+  document.getElementById('recent-divs').innerHTML = data.dividends.recent.map(d => "<tr><td class=\"date-cell\">" + d.date + "</td><td>" + d.name + "</td><td class=\"val\">+€" + d.amount.toFixed(2) + "</td></tr>").join('');
+}
+init();
+</script>
+</body>
+</html>

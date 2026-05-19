@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TR Portfolio Dashboard</title>
+<style>
+:root {
+  --bg: #0f1419;
+  --card: #1a1f2e;
+  --border: #2a3142;
+  --text: #e8eef5;
+  --muted: #7a8599;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; }
+
+h1 { font-size: 28px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px; font-weight: 700; }
+.logo-box { background: #fff; width: 40px; height: 40px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+
+.subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
+
+.nav { margin-bottom: 32px; display: flex; gap: 12px; }
+.nav a { 
+  color: var(--blue); 
+  text-decoration: none; 
+  font-size: 15px; 
+  border: 1px solid var(--blue); 
+  padding: 10px 24px; 
+  border-radius: 10px; 
+  font-weight: 500;
+  transition: all 0.2s;
+}
+.nav a.active { 
+  background: var(--blue); 
+  color: var(--bg); 
+  border-color: var(--blue);
+}
+.nav a:hover:not(.active) {
+  background: rgba(96, 165, 250, 0.1);
+}
+
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px; margin-bottom: 32px; }
+.card { background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; }
+.card .label { color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: 8px; }
+.card .value { font-size: 26px; font-weight: 700; }
+.card .delta { font-size: 13px; margin-top: 6px; }
+
+.green { color: var(--green); }
+.red { color: var(--red); }
+.amber { color: var(--amber); }
+.blue { color: var(--blue); }
+
+.controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.controls input, .controls select { background: var(--card); border: 1px solid var(--border);
+  color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px; }
+.controls input { min-width: 250px; }
+
+table { width: 100%; border-collapse: collapse; background: var(--card);
+  border-radius: 12px; overflow: hidden; margin-bottom: 12px; table-layout: fixed; }
+th, td { text-align: left; padding: 12px 16px; font-size: 14px;
+  border-bottom: 1px solid var(--border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+th { background: rgba(255,255,255,0.03); color: var(--muted);
+  font-weight: 600; cursor: pointer; user-select: none; }
+th:hover { color: var(--text); }
+tr:hover { background: rgba(255,255,255,0.02); }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+
+/* Width adjustments for columns */
+th:nth-child(1), td:nth-child(1) { width: 25%; } /* Name */
+th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
+.num { width: 10%; }
+
+.section { margin: 40px 0 16px; font-size: 18px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; width: 100%; }
+.section:hover { opacity: 0.8; }
+.badge { background: var(--border); color: var(--muted); font-size: 12px;
+  padding: 3px 10px; border-radius: 12px; font-weight: 500; }
+.toggle-icon { font-size: 14px; transition: transform 0.2s; color: var(--muted); }
+.collapsed .toggle-icon { transform: rotate(-90deg); }
+.hidden { display: none !important; }
+
+.warning { background: rgba(251, 191, 36, 0.1); border-left: 4px solid var(--amber);
+  padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px; }
+
+/* ============ Update button + MFA modal ============ */
+.update-btn {
+  background: var(--green); color: #0a1a0e; border: none; padding: 10px 22px;
+  border-radius: 10px; font-weight: 700; font-size: 15px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s;
+}
+.update-btn:hover:not(:disabled) { background: #6ee596; transform: translateY(-1px); }
+.update-btn:disabled { opacity: 0.5; cursor: wait; }
+.update-btn .spinner { display: none; width: 14px; height: 14px;
+  border: 2px solid #0a1a0e; border-top-color: transparent; border-radius: 50%;
+  animation: spin 0.8s linear infinite; }
+.update-btn.loading .spinner { display: inline-block; }
+.update-btn.loading .icon { display: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.update-status { display: inline-block; margin-left: 12px; font-size: 13px;
+  padding: 4px 10px; border-radius: 6px; }
+.update-status.ok { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.update-status.err { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none;
+  align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(4px);
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: var(--card); border: 1px solid var(--border); border-radius: 16px;
+  padding: 32px; width: 100%; max-width: 460px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.modal h3 { font-size: 20px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+.modal p { color: var(--muted); font-size: 14px; margin-bottom: 20px; line-height: 1.6; }
+.modal .hint { background: rgba(96, 165, 250, 0.08); border-left: 3px solid var(--blue);
+  padding: 12px 14px; border-radius: 4px; font-size: 13px; color: var(--text); margin-bottom: 20px; }
+.modal input[type="text"] {
+  width: 100%; background: var(--bg); border: 2px solid var(--border); color: var(--text);
+  padding: 16px; font-size: 28px; border-radius: 10px; text-align: center;
+  letter-spacing: 12px; font-family: monospace; font-weight: 700;
+  margin-bottom: 16px; transition: border-color 0.2s;
+}
+.modal input[type="text"]:focus { outline: none; border-color: var(--blue); }
+.modal .err-msg { color: var(--red); font-size: 13px; margin-bottom: 16px; display: none; }
+.modal .err-msg.show { display: block; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal button {
+  padding: 10px 22px; border-radius: 8px; font-weight: 600; font-size: 14px;
+  border: none; cursor: pointer; transition: all 0.2s;
+}
+.btn-cancel { background: transparent; color: var(--muted); border: 1px solid var(--border) !important; }
+.btn-cancel:hover { color: var(--text); }
+.btn-submit { background: var(--blue); color: var(--bg); }
+.btn-submit:hover:not(:disabled) { background: #7ab3ff; }
+.btn-submit:disabled { opacity: 0.5; cursor: wait; }
+</style>
+</head>
+<body>
+
+<h1>
+  <div class="logo-box">📊</div>
+  Trade Republic Portfolio
+</h1>
+
+<div class="nav" style="justify-content: space-between; align-items: center;">
+  <div style="display: flex; gap: 12px;">
+    <a href="index.html" class="active">Portfolio</a>
+    <a href="analytics.html">Analytics</a>
+  </div>
+  <div>
+    <button id="update-btn" class="update-btn" onclick="updateData()">
+      <span class="spinner"></span><span class="icon">🔄</span><span class="label">Update Now</span>
+    </button>
+    <span id="update-status" class="update-status" style="display:none"></span>
+  </div>
+</div>
+
+<p class="subtitle">Data extracted via pytr (WebSocket TR). <span id="ts"></span></p>
+
+<!-- ============ MFA Modal ============ -->
+<div id="mfa-modal" class="modal-backdrop" onclick="if(event.target===this)closeMfaModal()">
+  <div class="modal">
+    <h3>🔐 Trade Republic Security Code</h3>
+    <p>Tu sesión expiró. Trade Republic necesita verificar que eres tú.</p>
+    <div class="hint">
+      📱 <strong>Abre la app de Trade Republic</strong> en tu teléfono — recibirás una
+      notificación push con un código de 4 dígitos.<br>
+      💬 Si no llega push, deja vacío y presiona Submit para recibir el código por SMS.
+    </div>
+    <input type="text" id="mfa-input" inputmode="numeric" pattern="[0-9]*" maxlength="4"
+           autocomplete="one-time-code" placeholder="0000"
+           oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+           onkeydown="if(event.key==='Enter')submitMfa()">
+    <div id="mfa-err" class="err-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeMfaModal()">Cancel</button>
+      <button id="mfa-submit-btn" class="btn-submit" onclick="submitMfa()">Submit</button>
+    </div>
+  </div>
+</div>
+
+<div class="warning" id="warning" style="display:none"></div>
+
+<div class="cards" id="cards"></div>
+
+<div class="section" onclick="toggleSection('winners')">
+  <span class="toggle-icon">▼</span> 🏆 Top Winners <span class="badge" id="winners-count">0</span>
+</div>
+<table id="winners">
+  <thead>
+    <tr>
+      <th data-sort="name">Asset</th>
+      <th data-sort="isin">ISIN</th>
+      <th class="num" data-sort="quantity">Qty</th>
+      <th class="num" data-sort="net_value_eur">Value</th>
+      <th class="num" data-sort="pl_eur">P/L €</th>
+      <th class="num" data-sort="pl_pct">P/L %</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div class="section" onclick="toggleSection('losers')">
+  <span class="toggle-icon">▼</span> 💔 Top Losers <span class="badge" id="losers-count">0</span>
+</div>
+<table id="losers">
+  <thead>
+    <tr>
+      <th data-sort="name">Asset</th>
+      <th data-sort="isin">ISIN</th>
+      <th class="num" data-sort="quantity">Qty</th>
+      <th class="num" data-sort="net_value_eur">Value</th>
+      <th class="num" data-sort="pl_eur">P/L €</th>
+      <th class="num" data-sort="pl_pct">P/L %</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<div class="section" onclick="toggleSection('all-container')">
+  <span class="toggle-icon">▼</span> 📋 All Positions <span class="badge" id="total-count">0</span>
+</div>
+
+<div id="all-container">
+  <div class="controls">
+    <input type="text" id="search" placeholder="Search name or ISIN...">
+    <select id="bucketFilter">
+      <option value="all">All value ranges</option>
+      <option value="over_2000">Over €2,000</option>
+      <option value="range_500_2000">€500–€2,000</option>
+      <option value="range_100_500">€100–€500</option>
+      <option value="range_20_100">€20–€100</option>
+      <option value="under_20">Under €20</option>
+    </select>
+    <select id="plFilter">
+      <option value="all">All P/L</option>
+      <option value="winners">Winners (+)</option>
+      <option value="losers">Losers (-)</option>
+      <option value="big_winners">Winners >50%</option>
+      <option value="big_losers">Losers >25%</option>
+    </select>
+  </div>
+
+  <table id="all">
+    <thead>
+      <tr>
+        <th data-sort="name">Name</th>
+        <th data-sort="isin">ISIN</th>
+        <th class="num" data-sort="quantity">Qty</th>
+        <th class="num" data-sort="avg_cost">Avg Cost</th>
+        <th class="num" data-sort="current_price">Price</th>
+        <th class="num" data-sort="buy_cost_eur">Invested</th>
+        <th class="num" data-sort="net_value_eur">Net Value</th>
+        <th class="num" data-sort="pl_eur">P/L €</th>
+        <th class="num" data-sort="pl_pct">P/L %</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<script>
+let state = { 
+  data: null, 
+  all: { sortBy: 'net_value_eur', sortDir: -1 },
+  winners: { sortBy: 'pl_pct', sortDir: -1 },
+  losers: { sortBy: 'pl_pct', sortDir: 1 },
+  search: '', 
+  bucket: 'all', 
+  plFilter: 'all' 
+};
+
+const fmt = (n, d=2) => n.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtEUR = (n) => '€' + fmt(n);
+const fmtPct = (n) => (n >= 0 ? '+' : '') + fmt(n, 1) + '%';
+
+function toggleSection(id) {
+  const el = document.getElementById(id);
+  const section = el.previousElementSibling;
+  section.classList.toggle('collapsed');
+  el.classList.toggle('hidden');
+}
+
+// ============ Update flow (POST /update + MFA modal) ============
+const updateBtn = () => document.getElementById('update-btn');
+const updateStatus = () => document.getElementById('update-status');
+const setUpdateBtn = (loading, label) => {
+  const b = updateBtn();
+  b.disabled = loading;
+  b.classList.toggle('loading', loading);
+  b.querySelector('.label').textContent = label || 'Update Now';
+};
+const showStatus = (kind, msg) => {
+  const s = updateStatus();
+  s.className = 'update-status ' + kind;
+  s.textContent = msg;
+  s.style.display = 'inline-block';
+  if (kind === 'ok') setTimeout(() => { s.style.display = 'none'; }, 5000);
+};
+
+async function postUpdate(mfaCode) {
+  const body = mfaCode ? { mfa_code: mfaCode } : {};
+  const res = await fetch('/update', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  let payload = {};
+  try { payload = await res.json(); } catch (e) { payload = {}; }
+  // payload.status is a string like "ok" / "mfa_required" — keep it as `state`
+  return { http: res.status, state: payload.status, detail: payload.detail };
+}
+
+async function updateData() {
+  setUpdateBtn(true, 'Updating…');
+  try {
+    const r = await postUpdate(null);
+    if (r.http === 200) {
+      showStatus('ok', '✓ Updated — reloading');
+      setTimeout(() => location.reload(), 800);
+      return;
+    }
+    if (r.state === 'mfa_required') {
+      openMfaModal();
+      return;
+    }
+    showStatus('err', '✗ ' + (r.detail || r.state || ('HTTP ' + r.http)));
+  } catch (e) {
+    showStatus('err', '✗ Network error');
+  } finally {
+    setUpdateBtn(false);
+  }
+}
+
+function openMfaModal() {
+  document.getElementById('mfa-modal').classList.add('open');
+  document.getElementById('mfa-err').classList.remove('show');
+  document.getElementById('mfa-input').value = '';
+  setTimeout(() => document.getElementById('mfa-input').focus(), 100);
+  setUpdateBtn(false);
+}
+
+function closeMfaModal() {
+  document.getElementById('mfa-modal').classList.remove('open');
+}
+
+async function submitMfa() {
+  const code = document.getElementById('mfa-input').value.trim();
+  const errEl = document.getElementById('mfa-err');
+  errEl.classList.remove('show');
+  if (!/^\d{4}$/.test(code)) {
+    errEl.textContent = 'El código debe tener exactamente 4 dígitos.';
+    errEl.classList.add('show');
+    return;
+  }
+  const submitBtn = document.getElementById('mfa-submit-btn');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Verifying…';
+  setUpdateBtn(true, 'Updating…');
+  try {
+    const r = await postUpdate(code);
+    if (r.http === 200) {
+      closeMfaModal();
+      showStatus('ok', '✓ Updated — reloading');
+      setTimeout(() => location.reload(), 800);
+      return;
+    }
+    if (r.state === 'mfa_invalid' || r.state === 'mfa_required') {
+      errEl.textContent = 'Código incorrecto. Verifica e intenta de nuevo.';
+      errEl.classList.add('show');
+      document.getElementById('mfa-input').select();
+    } else if (r.state === 'auth_failed') {
+      errEl.textContent = 'Credenciales pytr inválidas. Revisa ~/.pytr/credentials.';
+      errEl.classList.add('show');
+    } else {
+      errEl.textContent = r.detail || ('Error ' + r.http);
+      errEl.classList.add('show');
+    }
+  } catch (e) {
+    errEl.textContent = 'Network error: ' + e.message;
+    errEl.classList.add('show');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit';
+    setUpdateBtn(false);
+  }
+}
+
+async function load() {
+  const res = await fetch('../DATA/portfolio.json?t=' + Date.now());
+  state.data = await res.json();
+  document.getElementById('ts').textContent = 'Last update: ' + new Date().toLocaleString();
+
+  // Cards
+  const s = state.data.summary;
+  document.getElementById('cards').innerHTML = `
+    <div class="card"><div class="label">Total Net Value</div>
+      <div class="value blue">${fmtEUR(s.total_netvalue)}</div>
+      <div class="delta">Depot ${fmtEUR(s.depot_netvalue)} + Cash ${fmtEUR(s.cash_eur)}</div></div>
+    <div class="card"><div class="label">Total Investment Cost</div>
+      <div class="value">${fmtEUR(s.depot_buycost)}</div>
+      <div class="delta">Sum of all buys</div></div>
+    <div class="card"><div class="label">Total P/L</div>
+      <div class="value ${s.depot_pl_eur >= 0 ? 'green' : 'red'}">${fmtEUR(s.depot_pl_eur)}</div>
+      <div class="delta ${s.depot_pl_eur >= 0 ? 'green' : 'red'}">${fmtPct(s.depot_pl_pct)}</div></div>
+    <div class="card"><div class="label">Active Positions</div>
+      <div class="value">${state.data.positions_with_value}</div>
+      <div class="delta">+ ${state.data.zero_value_positions.length} with no price</div></div>
+    <div class="card"><div class="label">Available Cash</div>
+      <div class="value amber">${fmtEUR(s.cash_eur)}</div>
+      <div class="delta">To be reinvested</div></div>
+  `;
+
+  if (state.data.zero_value_positions.length > 0) {
+    const w = document.getElementById('warning');
+    w.style.display = 'block';
+    w.innerHTML = '⚠️ <strong>Positions with missing price:</strong> ' +
+      state.data.zero_value_positions.map(p => p.name).join(', ');
+  }
+
+  document.getElementById('total-count').textContent = state.data.positions_with_value;
+
+  renderWinners();
+  renderLosers();
+  renderAll();
+}
+
+function rowHTML(p) {
+  const plClass = p.pl_pct >= 0 ? 'pos' : 'neg';
+  return `<tr>
+    <td title="${p.name}">${p.name}</td>
+    <td><code style="font-size:11px;color:var(--muted)">${p.isin}</code></td>
+    <td class="num">${fmt(p.quantity, 4)}</td>
+    <td class="num">${fmtEUR(p.avg_cost)}</td>
+    <td class="num">${fmtEUR(p.current_price)}</td>
+    <td class="num">${fmtEUR(p.buy_cost_eur)}</td>
+    <td class="num"><strong>${fmtEUR(p.net_value_eur)}</strong></td>
+    <td class="num ${plClass}">${fmtEUR(p.pl_eur)}</td>
+    <td class="num ${plClass}"><strong>${fmtPct(p.pl_pct)}</strong></td>
+  </tr>`;
+}
+
+function shortRow(p) {
+  const plClass = p.pl_pct >= 0 ? 'pos' : 'neg';
+  return `<tr>
+    <td title="${p.name}">${p.name}</td>
+    <td><code style="font-size:11px;color:var(--muted)">${p.isin}</code></td>
+    <td class="num">${fmt(p.quantity, 4)}</td>
+    <td class="num"><strong>${fmtEUR(p.net_value_eur)}</strong></td>
+    <td class="num ${plClass}">${fmtEUR(p.pl_eur)}</td>
+    <td class="num ${plClass}"><strong>${fmtPct(p.pl_pct)}</strong></td>
+  </tr>`;
+}
+
+function sortArray(arr, cfg) {
+  return [...arr].sort((a, b) => {
+    const av = a[cfg.sortBy], bv = b[cfg.sortBy];
+    if (typeof av === 'number') return (av - bv) * cfg.sortDir;
+    return String(av).localeCompare(String(bv)) * cfg.sortDir;
+  });
+}
+
+function renderWinners() {
+  const list = sortArray(state.data.winners_50plus, state.winners);
+  document.getElementById('winners-count').textContent = list.length;
+  document.querySelector('#winners tbody').innerHTML = list.map(shortRow).join('');
+}
+
+function renderLosers() {
+  const list = sortArray(state.data.losers_25minus, state.losers);
+  document.getElementById('losers-count').textContent = list.length;
+  document.querySelector('#losers tbody').innerHTML = list.map(shortRow).join('');
+}
+
+function renderAll() {
+  let arr = [...state.data.all_positions];
+
+  if (state.bucket === 'over_2000') arr = arr.filter(p => p.net_value_eur >= 2000);
+  else if (state.bucket === 'range_500_2000') arr = arr.filter(p => p.net_value_eur >= 500 && p.net_value_eur < 2000);
+  else if (state.bucket === 'range_100_500') arr = arr.filter(p => p.net_value_eur >= 100 && p.net_value_eur < 500);
+  else if (state.bucket === 'range_20_100') arr = arr.filter(p => p.net_value_eur >= 20 && p.net_value_eur < 100);
+  else if (state.bucket === 'under_20') arr = arr.filter(p => p.net_value_eur < 20);
+
+  if (state.plFilter === 'winners') arr = arr.filter(p => p.pl_pct > 0);
+  else if (state.plFilter === 'losers') arr = arr.filter(p => p.pl_pct < 0);
+  else if (state.plFilter === 'big_winners') arr = arr.filter(p => p.pl_pct >= 50);
+  else if (state.plFilter === 'big_losers') arr = arr.filter(p => p.pl_pct <= -25);
+
+  if (state.search) {
+    const s = state.search.toLowerCase();
+    arr = arr.filter(p => p.name.toLowerCase().includes(s) || p.isin.toLowerCase().includes(s));
+  }
+
+  arr = sortArray(arr, state.all);
+  document.querySelector('#all tbody').innerHTML = arr.map(rowHTML).join('');
+}
+
+document.getElementById('search').addEventListener('input', e => { state.search = e.target.value; renderAll(); });
+document.getElementById('bucketFilter').addEventListener('change', e => { state.bucket = e.target.value; renderAll(); });
+document.getElementById('plFilter').addEventListener('change', e => { state.plFilter = e.target.value; renderAll(); });
+
+document.querySelectorAll('th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const tableId = th.closest('table').id;
+    const key = th.dataset.sort;
+    const cfg = state[tableId] || state['all']; // Fallback for all-container
+
+    if (cfg.sortBy === key) cfg.sortDir = -cfg.sortDir;
+    else { cfg.sortBy = key; cfg.sortDir = -1; }
+
+    if (tableId === 'winners') renderWinners();
+    else if (tableId === 'losers') renderLosers();
+    else if (tableId === 'all') renderAll();
+  });
+});
+
+load();
+</script>
+</body>
+</html>

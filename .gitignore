@@ -1,0 +1,4 @@
+# Todo lo descargado / generado / stateful vive en DATA/. No va a Git.
+DATA/
+*.log
+.DS_Store

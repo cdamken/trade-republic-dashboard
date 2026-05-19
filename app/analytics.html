@@ -60,32 +60,32 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
 
 <!-- Cash Flow (external: TR ↔ outside world) -->
 <div class="cf-card">
-  <h2>Cash Flow — Entradas y salidas del Wealth</h2>
+  <h2>Cash Flow — Money in & out of the wealth</h2>
   <div class="cf-grid">
     <div class="cf-tile in">
-      <div class="label">Depósitos</div>
+      <div class="label">Deposits</div>
       <div class="value" id="cf-deposits">€0</div>
-      <div class="sub"><span id="cf-deposits-count">0</span> transacciones</div>
+      <div class="sub"><span id="cf-deposits-count">0</span> transactions</div>
     </div>
     <div class="cf-tile in">
-      <div class="label">Reembolsos fiscales</div>
+      <div class="label">Tax refunds</div>
       <div class="value" id="cf-refunds">€0</div>
-      <div class="sub"><span id="cf-refunds-count">0</span> transacciones</div>
+      <div class="sub"><span id="cf-refunds-count">0</span> transactions</div>
     </div>
     <div class="cf-tile out">
-      <div class="label">Salidas (tarjeta TR)</div>
+      <div class="label">Card spending (out)</div>
       <div class="value" id="cf-removals">€0</div>
-      <div class="sub"><span id="cf-removals-count">0</span> transacciones</div>
+      <div class="sub"><span id="cf-removals-count">0</span> transactions</div>
     </div>
     <div class="cf-tile">
-      <div class="label">Capital neto en TR</div>
+      <div class="label">Net capital in TR</div>
       <div class="value" id="cf-net" style="color: var(--blue);">€0</div>
-      <div class="sub">Entradas − Salidas</div>
+      <div class="sub">Inflows − Outflows</div>
     </div>
   </div>
   <div class="cf-grid">
     <div class="cf-tile">
-      <div class="label">Valor actual (portfolio + cash)</div>
+      <div class="label">Current value (portfolio + cash)</div>
       <div class="value" id="cf-current" style="color: var(--text);">€0</div>
     </div>
     <div class="cf-tile" id="cf-pl-tile">
@@ -94,19 +94,19 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
       <div class="sub" id="cf-pl-pct">0.00%</div>
     </div>
     <div class="cf-tile">
-      <div class="label">Cash flow neto mensual (avg)</div>
+      <div class="label">Avg monthly net flow</div>
       <div class="value" id="cf-avg-month" style="color: var(--text); font-size: 24px;">€0</div>
-      <div class="sub" id="cf-month-count">0 meses</div>
+      <div class="sub" id="cf-month-count">0 months</div>
     </div>
     <div class="cf-tile">
-      <div class="label">Último depósito</div>
+      <div class="label">Last deposit</div>
       <div class="value" id="cf-last-deposit" style="color: var(--text); font-size: 20px;">—</div>
       <div class="sub" id="cf-last-deposit-date">—</div>
     </div>
   </div>
   <div class="cf-formula">
-    <strong>Net capital in TR</strong> = Depósitos + Reembolsos fiscales − Salidas con tarjeta.
-    <strong>Lifetime P/L</strong> = Valor actual − Capital neto en TR. Refleja ganancias/pérdidas reales sobre lo que realmente sigue trabajando dentro del wealth.
+    <strong>Net capital in TR</strong> = Deposits + Tax refunds − Card spending.
+    <strong>Lifetime P/L</strong> = Current value − Net capital in TR. Reflects real gains/losses on what actually remains working inside the wealth.
   </div>
   <div style="height: 260px; margin-top: 24px;"><canvas id="cashFlowChart"></canvas></div>
 </div>
@@ -123,7 +123,7 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
   <div class="card">
     <h2>Net Worth Evolution</h2>
     <div class="stat" id="history-current">€0.00</div>
-    <div class="substat">Cumulative inflow (Deposits + Earnings)</div>
+    <div class="substat">Total portfolio value (positions + cash) over time</div>
     <div class="chart-container" id="history-container">
       <canvas id="historyChart"></canvas>
     </div>
@@ -175,7 +175,7 @@ async function init() {
     const avgNet = monthly.reduce((s, m) => s + m.net_flow, 0) / monthly.length;
     document.getElementById('cf-avg-month').textContent =
       (avgNet >= 0 ? '+' : '−') + fmtEur0(Math.abs(avgNet));
-    document.getElementById('cf-month-count').textContent = monthly.length + ' meses';
+    document.getElementById('cf-month-count').textContent = monthly.length + ' months';
 
     const lastDepMonth = [...monthly].reverse().find(m => m.deposits > 0);
     if (lastDepMonth) {
@@ -189,10 +189,10 @@ async function init() {
       data: {
         labels: monthly.map(m => m.month),
         datasets: [
-          { label: 'Depósitos', data: monthly.map(m => m.deposits), backgroundColor: '#4ade80', borderRadius: 4, stack: 'in' },
-          { label: 'Reembolsos', data: monthly.map(m => m.tax_refunds), backgroundColor: '#60a5fa', borderRadius: 4, stack: 'in' },
-          { label: 'Salidas tarjeta', data: monthly.map(m => -m.removals), backgroundColor: '#f87171', borderRadius: 4, stack: 'out' },
-          { label: 'Neto', type: 'line', data: monthly.map(m => m.net_flow), borderColor: '#fbbf24', borderWidth: 3, tension: 0.3, pointRadius: 3, fill: false },
+          { label: 'Deposits',      data: monthly.map(m => m.deposits),    backgroundColor: '#4ade80', borderRadius: 4, stack: 'in' },
+          { label: 'Tax refunds',   data: monthly.map(m => m.tax_refunds), backgroundColor: '#60a5fa', borderRadius: 4, stack: 'in' },
+          { label: 'Card spending', data: monthly.map(m => -m.removals),   backgroundColor: '#f87171', borderRadius: 4, stack: 'out' },
+          { label: 'Net flow',      type: 'line', data: monthly.map(m => m.net_flow), borderColor: '#fbbf24', borderWidth: 3, tension: 0.3, pointRadius: 3, fill: false },
         ],
       },
       options: {
@@ -217,39 +217,65 @@ async function init() {
     options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e8eef5', font: { size: 22, weight: 'bold' }, padding: 30 } } }, cutout: '65%' }
   });
 
-  // 2. History Chart (CLEANED UP)
+  // 2. History Chart — show real swings instead of a deceptive "drops to zero" look
   const hist = data.history;
   if (hist && hist.length > 0) {
-    document.getElementById('history-current').textContent = '€' + hist[hist.length-1].value.toLocaleString(undefined, {minimumFractionDigits:2});
+    document.getElementById('history-current').textContent =
+      '€' + hist[hist.length-1].value.toLocaleString(undefined, {minimumFractionDigits:2});
+
+    // Compute a tight Y range so the actual variation is visible
+    // (default Chart.js auto-scaling can collapse the line visually toward 0
+    //  if the area fill is enabled). We pad by ~5% above/below the data.
+    const values = hist.map(h => h.value);
+    const minV = Math.min(...values);
+    const maxV = Math.max(...values);
+    const padding = (maxV - minV) * 0.1 || 100;
+    const yMin = Math.max(0, Math.floor((minV - padding) / 1000) * 1000);
+    const yMax = Math.ceil((maxV + padding) / 1000) * 1000;
+
     new Chart(document.getElementById('historyChart'), {
       type: 'line',
-      data: { 
-        labels: hist.map(h=>h.date), 
-        datasets: [{ 
-          data: hist.map(h=>h.value), 
-          borderColor: '#60a5fa', 
-          borderWidth: 4, 
-          tension: 0.3, 
-          fill: true, 
-          backgroundColor: 'rgba(96, 165, 250, 0.05)', 
-          pointRadius: 2,
-          pointHitRadius: 10
-        }] 
+      data: {
+        labels: hist.map(h => h.date),
+        datasets: [{
+          data: values,
+          borderColor: '#60a5fa',
+          borderWidth: 3,
+          tension: 0.3,
+          fill: false,        // ← avoid the "falls to zero" visual illusion
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          pointHitRadius: 12,
+        }],
       },
-      options: { 
-        maintainAspectRatio: false, 
-        plugins: { legend: { display: false } }, 
-        scales: { 
-          y: { 
-            ticks: { color: '#e8eef5', font: { size: 24, weight: 'bold' }, padding: 15, callback: (v) => '€' + (v/1000).toFixed(0) + 'k' }, 
-            grid: { color: 'rgba(255,255,255,0.05)' }
-          }, 
-          x: { 
-            ticks: { color: '#7a8599', font: { size: 14, weight: 'bold' }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 }, 
-            grid: { display: false }
-          } 
-        } 
-      }
+      options: {
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => '€' + ctx.parsed.y.toLocaleString(undefined, {minimumFractionDigits:2}),
+            },
+          },
+        },
+        scales: {
+          y: {
+            min: yMin,        // ← explicit floor (not zero)
+            max: yMax,
+            ticks: {
+              color: '#e8eef5',
+              font: { size: 20, weight: 'bold' },
+              padding: 12,
+              callback: (v) => '€' + (v / 1000).toFixed(0) + 'k',
+            },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+          },
+          x: {
+            ticks: { color: '#7a8599', font: { size: 12, weight: 'bold' }, maxRotation: 0, autoSkip: true, maxTicksLimit: 8 },
+            grid: { display: false },
+          },
+        },
+      },
     });
   }
 

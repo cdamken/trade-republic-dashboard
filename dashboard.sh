@@ -246,6 +246,34 @@ summarize() {
 }
 
 # ----------------------------------------------------------------------- dispatch
+do_reset() {
+    cat <<'EOF'
+⚠️  This will ERASE everything related to the current Trade Republic account:
+   • ~/.pytr/credentials  (phone + PIN)
+   • ~/.pytr/cookies.*    (session)
+   • DATA/                (portfolio, transactions, history, analytics)
+
+The next run of ./dashboard.sh will trigger the first-time setup wizard.
+EOF
+    read -p "Type 'delete' to confirm: " ans
+    if [ "$ans" != "delete" ]; then
+        echo "Aborted."
+        exit 0
+    fi
+
+    # pytr credentials + cookies
+    rm -f "$HOME/.pytr/credentials"
+    rm -f "$HOME/.pytr"/cookies.*
+
+    # Project DATA contents
+    if [ -d "$DATA_DIR" ]; then
+        find "$DATA_DIR" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    fi
+    mkdir -p "$DATA_DIR"
+
+    echo "✅ Account erased. Run ./dashboard.sh to configure a new one."
+}
+
 case "${1:-}" in
     "")        do_update ;;
     update)    do_update ;;
@@ -254,8 +282,9 @@ case "${1:-}" in
     stop)      stop_server ;;
     restart)   stop_server; start_server ;;
     status)    do_status ;;
+    reset)     do_reset ;;
     *)
-        echo "Usage: $0 [update|full|start|stop|restart|status]"
+        echo "Usage: $0 [update|full|start|stop|restart|status|reset]"
         echo ""
         echo "  (no args)  Smart update + arranca server (alias de 'update')"
         echo "  update     Smart update (incremental transactions, full portfolio)"
@@ -264,6 +293,7 @@ case "${1:-}" in
         echo "  stop       Stop the server"
         echo "  restart    stop + start"
         echo "  status     Show data files, last update, server state"
+        echo "  reset      Erase current account (credentials + DATA) to switch"
         exit 1
         ;;
 esac

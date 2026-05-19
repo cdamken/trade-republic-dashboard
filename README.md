@@ -87,7 +87,14 @@ The first time the dashboard opens, if no `~/.pytr/credentials` exists, a **welc
 ./dashboard.sh stop         Stop the server
 ./dashboard.sh restart      stop + start
 ./dashboard.sh status       Show data files, last update, server state
+./dashboard.sh reset        Erase current account to switch to a different one
 ```
+
+### 🔄 Switching to a different account
+
+Click **⚙️ Switch account** in the dashboard header (next to "Update Now"), type `delete` to confirm, and the dashboard wipes the current credentials + session + downloaded data. The first-time setup wizard then opens automatically so you can configure a new account.
+
+CLI equivalent: `./dashboard.sh reset`.
 
 You can override the port with `TR_DASHBOARD_PORT=9000 ./dashboard.sh`.
 

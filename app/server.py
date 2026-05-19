@@ -60,6 +60,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == "/setup":
             return self._handle_setup()
+        if self.path == "/reset":
+            return self._handle_reset()
         if self.path != "/update":
             self.send_response(404)
             self.end_headers()
@@ -158,6 +160,65 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         self._json(200, {"status": "ok", "next": "post_update_with_mfa"})
+
+    # ------------------------------------------------------------------ reset
+    def _handle_reset(self):
+        """Erase the current account: pytr credentials, cookies, and project DATA.
+        Requires confirmation flag in the body: {"confirm": "delete"}."""
+        length = int(self.headers.get("Content-Length") or 0)
+        body = {}
+        if length:
+            try:
+                body = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self._json(400, {"status": "bad_request", "detail": "invalid JSON"})
+                return
+
+        if body.get("confirm") != "delete":
+            self._json(400, {
+                "status": "confirm_required",
+                "detail": 'send {"confirm": "delete"} to actually reset',
+            })
+            return
+
+        import shutil
+        removed = []
+        errors = []
+
+        # 1. pytr credentials + cookies
+        pytr_dir = Path.home() / ".pytr"
+        if pytr_dir.is_dir():
+            for f in pytr_dir.iterdir():
+                # Keep the directory itself; delete credential + cookie files
+                if f.name == "credentials" or f.name.startswith("cookies."):
+                    try:
+                        f.unlink()
+                        removed.append(str(f.relative_to(Path.home())))
+                    except Exception as e:
+                        errors.append(f"{f.name}: {e}")
+
+        # 2. Project DATA/ contents (keep the directory itself; recreate it empty)
+        data_dir = PROJECT_DIR / "DATA"
+        if data_dir.is_dir():
+            for f in data_dir.iterdir():
+                try:
+                    if f.is_dir():
+                        shutil.rmtree(f)
+                    else:
+                        f.unlink()
+                    removed.append(f"DATA/{f.name}")
+                except Exception as e:
+                    errors.append(f"DATA/{f.name}: {e}")
+
+        if errors:
+            self._json(500, {
+                "status": "partial",
+                "removed": removed,
+                "errors": errors,
+            })
+            return
+
+        self._json(200, {"status": "ok", "removed": removed})
 
     # ---- helpers -------------------------------------------------------
     def _json(self, code, payload):

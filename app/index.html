@@ -158,9 +158,13 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
     <a href="index.html" class="active">Portfolio</a>
     <a href="analytics.html">Analytics</a>
   </div>
-  <div>
+  <div style="display:flex; gap:10px; align-items:center;">
     <button id="update-btn" class="update-btn" onclick="updateData()">
       <span class="spinner"></span><span class="icon">🔄</span><span class="label">Update Now</span>
+    </button>
+    <button class="update-btn" style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
+            onclick="openResetModal()" title="Erase this account and configure a new one">
+      ⚙️ Switch account
     </button>
     <span id="update-status" class="update-status" style="display:none"></span>
   </div>
@@ -186,6 +190,35 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeMfaModal()">Cancel</button>
       <button id="mfa-submit-btn" class="btn-submit" onclick="submitMfa()">Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ Reset / Switch Account Modal ============ -->
+<div id="reset-modal" class="modal-backdrop" onclick="if(event.target===this)closeResetModal()">
+  <div class="modal">
+    <h3>⚠️ Switch to a different account?</h3>
+    <p>This will <strong>erase</strong> everything related to the current Trade Republic account:</p>
+    <div class="hint" style="background:rgba(248,113,113,0.08); border-left-color:var(--red); color:var(--text);">
+      • <code>~/.pytr/credentials</code> (phone + PIN)<br>
+      • <code>~/.pytr/cookies.*</code> (session)<br>
+      • Contents of <code>DATA/</code> (portfolio, transactions, history, analytics)<br>
+      <br>
+      The wizard will start over to configure a new account. <strong>This cannot be undone.</strong>
+    </div>
+    <p style="font-size:13px; color:var(--muted); margin-bottom:16px;">
+      Type <code style="color:var(--red);">delete</code> below to confirm:
+    </p>
+    <input type="text" id="reset-confirm" placeholder="delete"
+           style="width:100%; background:var(--bg); border:2px solid var(--border); color:var(--text); padding:14px 16px; font-size:18px; border-radius:10px; font-family:monospace; margin-bottom:16px; text-align:center;"
+           autocomplete="off"
+           oninput="document.getElementById('reset-submit-btn').disabled = this.value !== 'delete'"
+           onkeydown="if(event.key==='Enter' && this.value==='delete') submitReset()">
+    <div id="reset-err" class="err-msg"></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeResetModal()">Cancel</button>
+      <button id="reset-submit-btn" class="btn-submit" onclick="submitReset()" disabled
+              style="background:var(--red); color:#fff;">Erase & switch</button>
     </div>
   </div>
 </div>
@@ -348,6 +381,52 @@ async function postUpdate(mfaCode) {
   try { payload = await res.json(); } catch (e) { payload = {}; }
   // payload.status is a string like "ok" / "mfa_required" — keep it as `state`
   return { http: res.status, state: payload.status, detail: payload.detail };
+}
+
+// ============ Switch account / Reset ============
+function openResetModal() {
+  document.getElementById('reset-modal').classList.add('open');
+  document.getElementById('reset-err').classList.remove('show');
+  document.getElementById('reset-confirm').value = '';
+  document.getElementById('reset-submit-btn').disabled = true;
+  setTimeout(() => document.getElementById('reset-confirm').focus(), 100);
+}
+
+function closeResetModal() {
+  document.getElementById('reset-modal').classList.remove('open');
+}
+
+async function submitReset() {
+  const confirm = document.getElementById('reset-confirm').value;
+  const errEl = document.getElementById('reset-err');
+  const btn = document.getElementById('reset-submit-btn');
+  if (confirm !== 'delete') return;
+
+  btn.disabled = true;
+  btn.textContent = 'Erasing…';
+  errEl.classList.remove('show');
+
+  try {
+    const r = await fetch('/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'delete' }),
+    });
+    const j = await r.json();
+    if (r.status === 200) {
+      // Reload — without credentials, the setup wizard will open automatically.
+      location.reload();
+      return;
+    }
+    errEl.textContent = j.detail || ('Error ' + r.status);
+    errEl.classList.add('show');
+  } catch (e) {
+    errEl.textContent = 'Network error: ' + e.message;
+    errEl.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Erase & switch';
+  }
 }
 
 // ============ First-time setup wizard ============

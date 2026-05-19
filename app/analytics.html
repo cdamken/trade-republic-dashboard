@@ -211,7 +211,15 @@ async function init() {
       document.getElementById('cf-last-deposit-date').textContent = lastDepMonth.month;
     }
 
-    // Stacked bars (in/out per month) + line for net flow
+    // Cumulative net capital (running sum of monthly net flows) — continues
+    // from where the previous month ended instead of restarting at 0.
+    let running = 0;
+    const cumulative = monthly.map(m => {
+      running += m.net_flow;
+      return Math.round(running * 100) / 100;
+    });
+
+    // Stacked bars (in/out per month, isolated) + cumulative line on top
     new Chart(document.getElementById('cashFlowChart'), {
       type: 'bar',
       data: {
@@ -220,15 +228,35 @@ async function init() {
           { label: 'Deposits',      data: monthly.map(m => m.deposits),    backgroundColor: '#4ade80', borderRadius: 4, stack: 'in' },
           { label: 'Tax refunds',   data: monthly.map(m => m.tax_refunds), backgroundColor: '#60a5fa', borderRadius: 4, stack: 'in' },
           { label: 'Card spending', data: monthly.map(m => -m.removals),   backgroundColor: '#f87171', borderRadius: 4, stack: 'out' },
-          { label: 'Net flow',      type: 'line', data: monthly.map(m => m.net_flow), borderColor: '#fbbf24', borderWidth: 3, tension: 0.3, pointRadius: 3, fill: false },
+          {
+            label: 'Cumulative net capital',
+            type: 'line',
+            data: cumulative,
+            borderColor: '#fbbf24',
+            backgroundColor: 'rgba(251, 191, 36, 0.06)',
+            borderWidth: 3,
+            tension: 0.25,
+            pointRadius: 3,
+            pointHoverRadius: 6,
+            fill: false,
+            yAxisID: 'y1',   // separate axis so it has its own scale (~€0–€80k)
+          },
         ],
       },
       options: {
         maintainAspectRatio: false,
-        plugins: { legend: { labels: { color: '#e8eef5', font: { size: 12 } } } },
+        plugins: {
+          legend: { labels: { color: '#e8eef5', font: { size: 12 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ctx.dataset.label + ': €' + ctx.parsed.y.toLocaleString(undefined, {maximumFractionDigits:0}),
+            },
+          },
+        },
         scales: {
-          y: { stacked: true, ticks: { color: '#e8eef5', callback: v => '€' + (v/1000).toFixed(1) + 'k' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-          x: { stacked: true, ticks: { color: '#7a8599', maxRotation: 45 }, grid: { display: false } },
+          y:  { stacked: true, position: 'left',  ticks: { color: '#e8eef5', callback: v => '€' + (v/1000).toFixed(1) + 'k' }, grid: { color: 'rgba(255,255,255,0.05)' }, title: { display: true, text: 'Monthly flows', color: '#7a8599' } },
+          y1: { position: 'right', ticks: { color: '#fbbf24', callback: v => '€' + (v/1000).toFixed(0) + 'k' }, grid: { display: false }, title: { display: true, text: 'Cumulative', color: '#fbbf24' } },
+          x:  { stacked: true, ticks: { color: '#7a8599', maxRotation: 45 }, grid: { display: false } },
         },
       },
     });

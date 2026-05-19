@@ -228,7 +228,14 @@ trade-republic-dashboard/
 
 ## 📄 License
 
-MIT — see [LICENSE](LICENSE).
+**Business Source License 1.1** — see [LICENSE](LICENSE).
+
+Free for **personal, non-commercial use**. Hosting it as a service, redistributing
+the source, or any kind of commercial / business use is not permitted without a
+separate agreement with the author. The license auto-converts to **Apache 2.0**
+on **May 19, 2030**.
+
+For commercial licensing or any other questions, open an issue.
 
 ---
 

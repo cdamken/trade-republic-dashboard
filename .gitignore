@@ -1,4 +1,22 @@
-# Todo lo descargado / generado / stateful vive en DATA/. No va a Git.
+# All downloaded / generated / stateful files live in DATA/ — never committed
 DATA/
 *.log
+*.pid
 .DS_Store
+
+# Safeguards against pytr side-effects that may land in the project root
+# (older pytr versions, or commands run without --no-store-event-database)
+all_events.json
+events_with_documents.json
+other_events.json
+pytr_history
+*.tmp
+*.partial
+
+# IDE / editor noise
+.idea/
+.vscode/
+*.swp
+*~
+__pycache__/
+*.pyc

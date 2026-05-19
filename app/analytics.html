@@ -108,6 +108,27 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
     <strong>Net capital in TR</strong> = Deposits + Tax refunds − Card spending.
     <strong>Lifetime P/L</strong> = Current value − Net capital in TR. Reflects real gains/losses on what actually remains working inside the wealth.
   </div>
+
+  <!-- Trading totals (raw numbers, no chart) -->
+  <h2 style="margin-top: 32px;">Trading totals</h2>
+  <div class="cf-grid">
+    <div class="cf-tile out">
+      <div class="label">Total stock purchases</div>
+      <div class="value" id="cf-buys">€0</div>
+      <div class="sub"><span id="cf-buys-count">0</span> buy orders</div>
+    </div>
+    <div class="cf-tile in">
+      <div class="label">Total stock sales</div>
+      <div class="value" id="cf-sells">€0</div>
+      <div class="sub"><span id="cf-sells-count">0</span> sell orders</div>
+    </div>
+    <div class="cf-tile">
+      <div class="label">Net traded</div>
+      <div class="value" id="cf-net-traded" style="color: var(--blue);">€0</div>
+      <div class="sub">Purchases − sales (money parked in positions)</div>
+    </div>
+  </div>
+
   <div style="height: 260px; margin-top: 24px;"><canvas id="cashFlowChart"></canvas></div>
 </div>
 
@@ -169,6 +190,13 @@ async function init() {
   document.getElementById('cf-pl').textContent = (pl >= 0 ? '+' : '−') + fmtEur0(Math.abs(pl));
   document.getElementById('cf-pl-pct').textContent = (plPct >= 0 ? '+' : '') + plPct.toFixed(2) + '%';
   document.getElementById('cf-pl-tile').classList.add(pl >= 0 ? 'pl-pos' : 'pl-neg');
+
+  // Trading totals (raw numbers)
+  document.getElementById('cf-buys').textContent = fmtEur0(cf.buys?.total || 0);
+  document.getElementById('cf-buys-count').textContent = (cf.buys?.count || 0).toLocaleString();
+  document.getElementById('cf-sells').textContent = fmtEur0(cf.sells?.total || 0);
+  document.getElementById('cf-sells-count').textContent = (cf.sells?.count || 0).toLocaleString();
+  document.getElementById('cf-net-traded').textContent = fmtEur0(cf.net_traded || 0);
 
   const monthly = cf.monthly || [];
   if (monthly.length > 0) {

@@ -30,8 +30,12 @@ def process_analytics():
             "deposits":      {"count": 0, "total": 0.0},
             "removals":      {"count": 0, "total": 0.0},  # Card spending (out)
             "tax_refunds":   {"count": 0, "total": 0.0},
+            # Internal trading totals (just the raw sums — no chart needed)
+            "buys":          {"count": 0, "total": 0.0},
+            "sells":         {"count": 0, "total": 0.0},
             # Computed
             "net_capital_in":  0.0,  # deposits + tax_refunds − removals
+            "net_traded":      0.0,  # buys − sells (money still parked in positions)
             "current_value":   0.0,  # total_netvalue (portfolio + cash)
             "lifetime_pl":     0.0,  # current_value − net_capital_in
             "lifetime_pl_pct": 0.0,
@@ -84,6 +88,12 @@ def process_analytics():
                     cf["tax_refunds"]["count"] += 1
                     cf["tax_refunds"]["total"] += abs_val
                     if month: monthly_flow[month]["tax_refunds"] += abs_val
+                elif t_type == "Buy":
+                    cf["buys"]["count"] += 1
+                    cf["buys"]["total"] += abs_val
+                elif t_type == "Sell":
+                    cf["sells"]["count"] += 1
+                    cf["sells"]["total"] += abs_val
 
                 # Dividends section (chart + recent), independent of cash_flow
                 if t_type == "Dividend" or t_type == "Interest":
@@ -105,6 +115,7 @@ def process_analytics():
         + cf["tax_refunds"]["total"]
         - cf["removals"]["total"]
     )
+    cf["net_traded"] = cf["buys"]["total"] - cf["sells"]["total"]
     for m in sorted(monthly_flow.keys()):
         d = monthly_flow[m]
         net = d["deposits"] + d["tax_refunds"] - d["removals"]

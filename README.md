@@ -23,7 +23,8 @@ This dashboard solves all three by using **[pytr](https://github.com/pytr-org/py
 ## ✨ Features
 
 - **Single script orchestrator** (`./dashboard.sh`) for everything: smart update, start/stop server, status.
-- **Web UI Update button with MFA modal** — when your TR session expires, a 4-digit code modal appears in the browser. No need to use the terminal.
+- **First-time setup wizard in the browser** — on first launch, a welcome modal asks for your TR phone + PIN. No need to touch the terminal.
+- **Web UI Update button with MFA modal** — when your TR session expires, a 4-digit code modal appears in the browser.
 - **Smart incremental transactions sync** — only fetches what's new (~2s) instead of redownloading the whole history (~3min).
 - **CLI fallback** — if you prefer, the script still supports the interactive flow with pytr's terminal prompt.
 - **Analytics page** — dividends chart, allocation pie, net worth timeline, cash flow breakdown (deposits / removals / lifetime P/L).
@@ -62,11 +63,15 @@ pipx install pytr
 # 2. Install Chromium for Playwright (used by pytr to bypass AWS WAF)
 ~/.local/pipx/venvs/pytr/bin/playwright install chromium
 
-# 3. Interactive login (TR sends a push notification or SMS)
-~/.local/bin/pytr login --store_credentials
+# 3. Launch the dashboard — it will guide you through login in the browser
+./dashboard.sh
 ```
 
-The login stores encrypted credentials in `~/.pytr/credentials`. If that bothers you, skip `--store_credentials` and you'll be asked for everything each time (~10 s with SMS).
+The first time the dashboard opens, if no `~/.pytr/credentials` exists, a **welcome wizard** asks for your TR phone number and PIN. After that, the MFA modal opens for the 4-digit security code TR pushes to your phone. From that point on, everything is automatic.
+
+> If you'd rather log in from the terminal, run `~/.local/bin/pytr login --store_credentials` once before launching the dashboard.
+
+> Credentials are stored locally in `~/.pytr/credentials` with permissions `0600` (rw owner only). The file is plain text — the same file pytr uses. Never transmitted anywhere except to the official Trade Republic API.
 
 > If `pytr` is in a non-standard location, set `PYTR_PATH=/path/to/pytr` in your env.
 

@@ -190,6 +190,34 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
   </div>
 </div>
 
+<!-- ============ First-time Setup Wizard ============ -->
+<div id="setup-modal" class="modal-backdrop">
+  <div class="modal" style="max-width: 480px;">
+    <h3>👋 Welcome — first-time setup</h3>
+    <p>To connect to Trade Republic, this dashboard needs your TR <strong>phone number</strong> and <strong>PIN</strong>.</p>
+    <div class="hint">
+      🔒 Stored locally in <code>~/.pytr/credentials</code> with permissions 0600.<br>
+      🚫 Never sent anywhere except the official Trade Republic API.<br>
+      ⚠️ Plain text — same place the pytr CLI uses.
+    </div>
+    <label style="display:block; color:var(--muted); font-size:12px; margin-bottom:6px; text-transform:uppercase; letter-spacing:1px; font-weight:600;">Phone (international format)</label>
+    <input type="tel" id="setup-phone" placeholder="+4912345678"
+           style="width:100%; background:var(--bg); border:2px solid var(--border); color:var(--text); padding:14px 16px; font-size:18px; border-radius:10px; font-family:monospace; margin-bottom:16px;"
+           autocomplete="tel"
+           onkeydown="if(event.key==='Enter')document.getElementById('setup-pin').focus()">
+    <label style="display:block; color:var(--muted); font-size:12px; margin-bottom:6px; text-transform:uppercase; letter-spacing:1px; font-weight:600;">PIN (4 digits)</label>
+    <input type="password" id="setup-pin" inputmode="numeric" pattern="[0-9]*" maxlength="6"
+           placeholder="••••"
+           style="width:100%; background:var(--bg); border:2px solid var(--border); color:var(--text); padding:14px 16px; font-size:24px; border-radius:10px; text-align:center; letter-spacing:8px; font-family:monospace; margin-bottom:16px;"
+           oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+           onkeydown="if(event.key==='Enter')submitSetup()">
+    <div id="setup-err" class="err-msg"></div>
+    <div class="modal-actions">
+      <button id="setup-submit-btn" class="btn-submit" onclick="submitSetup()" style="width:100%;">Continue →</button>
+    </div>
+  </div>
+</div>
+
 <div class="warning" id="warning" style="display:none"></div>
 
 <div class="cards" id="cards"></div>
@@ -320,6 +348,81 @@ async function postUpdate(mfaCode) {
   try { payload = await res.json(); } catch (e) { payload = {}; }
   // payload.status is a string like "ok" / "mfa_required" — keep it as `state`
   return { http: res.status, state: payload.status, detail: payload.detail };
+}
+
+// ============ First-time setup wizard ============
+async function checkSetup() {
+  try {
+    const r = await fetch('/setup_status');
+    const j = await r.json();
+    if (!j.setup_complete) openSetupModal();
+  } catch (e) { /* server not ready yet — silent */ }
+}
+
+function openSetupModal() {
+  document.getElementById('setup-modal').classList.add('open');
+  document.getElementById('setup-err').classList.remove('show');
+  setTimeout(() => document.getElementById('setup-phone').focus(), 100);
+}
+
+function closeSetupModal() {
+  document.getElementById('setup-modal').classList.remove('open');
+}
+
+async function submitSetup() {
+  const phone = document.getElementById('setup-phone').value.trim();
+  const pin = document.getElementById('setup-pin').value.trim();
+  const errEl = document.getElementById('setup-err');
+  errEl.classList.remove('show');
+
+  if (!/^\+\d{8,15}$/.test(phone)) {
+    errEl.textContent = 'Phone must look like +4912345678 (no spaces or dashes).';
+    errEl.classList.add('show');
+    document.getElementById('setup-phone').focus();
+    return;
+  }
+  if (!/^\d{4,6}$/.test(pin)) {
+    errEl.textContent = 'PIN must be 4–6 digits.';
+    errEl.classList.add('show');
+    document.getElementById('setup-pin').focus();
+    return;
+  }
+
+  const btn = document.getElementById('setup-submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving…';
+
+  try {
+    const r = await fetch('/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, pin }),
+    });
+    const j = await r.json();
+    if (r.status === 200) {
+      closeSetupModal();
+      // Now trigger the MFA flow: a fresh pytr login will need the 4-digit code.
+      // TR will push the code to the phone we just registered.
+      showStatus('ok', '✓ Credentials saved — requesting MFA code…');
+      // Empty body POST → server returns 401 mfa_required → modal opens
+      const upd = await postUpdate(null);
+      if (upd.http === 200) {
+        showStatus('ok', '✓ Already authenticated — reloading');
+        setTimeout(() => location.reload(), 800);
+      } else {
+        openMfaModal();
+      }
+      return;
+    }
+    errEl.textContent = j.detail || ('Error ' + r.status);
+    errEl.classList.add('show');
+  } catch (e) {
+    errEl.textContent = 'Network error: ' + e.message;
+    errEl.classList.add('show');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Continue →';
+  }
 }
 
 async function updateData() {
@@ -526,6 +629,7 @@ document.querySelectorAll('th[data-sort]').forEach(th => {
 });
 
 load();
+checkSetup();
 </script>
 </body>
 </html>

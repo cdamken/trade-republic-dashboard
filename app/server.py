@@ -25,6 +25,9 @@ PORT = 8085
 PROJECT_DIR = Path(__file__).resolve().parent.parent
 FETCH_SCRIPT = PROJECT_DIR / "app" / "tr_fetch.py"
 
+# pytr stores credentials at ~/.pytr/credentials (2 lines: phone, PIN)
+PYTR_CREDS = Path.home() / ".pytr" / "credentials"
+
 # Map tr_fetch.py exit codes to (HTTP status, JSON status string)
 EXIT_CODE_MAP = {
     0:  (200, "ok"),
@@ -40,12 +43,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PROJECT_DIR), **kwargs)
 
-    # Less noisy access log: only show POST /update lines
+    # Less noisy access log: only show POSTs and the setup endpoint
     def log_message(self, format, *args):
-        if "/update" in self.requestline or "update" in format:
+        if any(p in self.requestline for p in ("/update", "/setup", "POST")):
             super().log_message(format, *args)
 
+    # ------------------------------------------------------------------ GET
+    def do_GET(self):
+        if self.path == "/setup_status":
+            self._json(200, {"setup_complete": PYTR_CREDS.is_file()})
+            return
+        # Anything else: serve static files via the parent class
+        super().do_GET()
+
+    # ------------------------------------------------------------------ POST
     def do_POST(self):
+        if self.path == "/setup":
+            return self._handle_setup()
         if self.path != "/update":
             self.send_response(404)
             self.end_headers()
@@ -101,6 +115,50 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             payload["detail"] = last_stderr_line
         self._json(http_status, payload)
 
+    # ------------------------------------------------------------------ setup
+    def _handle_setup(self):
+        """Write phone + PIN to ~/.pytr/credentials. No login is performed here —
+        the browser is expected to immediately fire POST /update with the MFA
+        code afterwards."""
+        length = int(self.headers.get("Content-Length") or 0)
+        if not length:
+            self._json(400, {"status": "bad_request", "detail": "empty body"})
+            return
+        try:
+            body = json.loads(self.rfile.read(length).decode("utf-8"))
+        except json.JSONDecodeError:
+            self._json(400, {"status": "bad_request", "detail": "invalid JSON"})
+            return
+
+        phone = (body.get("phone") or "").strip()
+        pin = (body.get("pin") or "").strip()
+
+        # Validate phone: must start with + and contain 8-15 digits after it
+        import re
+        if not re.fullmatch(r"\+\d{8,15}", phone):
+            self._json(400, {
+                "status": "bad_phone",
+                "detail": "phone must be like +4912345678 (no spaces, no dashes)",
+            })
+            return
+        if not (pin.isdigit() and 4 <= len(pin) <= 6):
+            self._json(400, {
+                "status": "bad_pin",
+                "detail": "pin must be 4-6 digits",
+            })
+            return
+
+        # Write credentials file
+        try:
+            PYTR_CREDS.parent.mkdir(parents=True, exist_ok=True)
+            PYTR_CREDS.write_text(f"{phone}\n{pin}\n", encoding="utf-8")
+            os.chmod(PYTR_CREDS, 0o600)
+        except Exception as e:
+            self._json(500, {"status": "write_failed", "detail": str(e)})
+            return
+
+        self._json(200, {"status": "ok", "next": "post_update_with_mfa"})
+
     # ---- helpers -------------------------------------------------------
     def _json(self, code, payload):
         body = json.dumps(payload).encode("utf-8")
@@ -111,7 +169,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
+class ThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    """Multi-threaded so Chrome keep-alive connections don't block /update calls."""
+    daemon_threads = True
+    allow_reuse_address = True
+
+
 os.chdir(PROJECT_DIR)
-with socketserver.TCPServer(("", PORT), Handler) as httpd:
+with ThreadedServer(("", PORT), Handler) as httpd:
     print(f"🚀 Dashboard Server running at http://localhost:{PORT}/app/index.html")
     httpd.serve_forever()

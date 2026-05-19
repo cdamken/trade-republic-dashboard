@@ -517,6 +517,10 @@ async function updateData() {
       openMfaModal();
       return;
     }
+    if (r.state === 'rate_limited') {
+      showStatus('err', '⚠ Rate-limited by Trade Republic — wait 15–30 min and retry');
+      return;
+    }
     showStatus('err', '✗ ' + (r.detail || r.state || ('HTTP ' + r.http)));
   } catch (e) {
     showStatus('err', '✗ Network error');
@@ -559,11 +563,14 @@ async function submitMfa() {
       return;
     }
     if (r.state === 'mfa_invalid' || r.state === 'mfa_required') {
-      errEl.textContent = 'Código incorrecto. Verifica e intenta de nuevo.';
+      errEl.textContent = 'Wrong code. Check and try again.';
       errEl.classList.add('show');
       document.getElementById('mfa-input').select();
     } else if (r.state === 'auth_failed') {
-      errEl.textContent = 'Credenciales pytr inválidas. Revisa ~/.pytr/credentials.';
+      errEl.textContent = 'Invalid pytr credentials. Check ~/.pytr/credentials.';
+      errEl.classList.add('show');
+    } else if (r.state === 'rate_limited') {
+      errEl.textContent = '⚠ Trade Republic rate-limited login. Wait 15–30 min and retry.';
       errEl.classList.add('show');
     } else {
       errEl.textContent = r.detail || ('Error ' + r.http);

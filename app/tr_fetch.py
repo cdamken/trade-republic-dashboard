@@ -11,6 +11,7 @@ Exit codes (mapped to HTTP status by server.py):
   11  MFA invalid: provided --mfa-code rejected
   12  Bad credentials in ~/.pytr/credentials
   20  Network / pytr API error
+  21  Rate limited by Trade Republic (HTTP 429 — wait 15-30 min)
   30  Local processing error (parse_pytr_output / analyze_analytics)
 """
 from __future__ import annotations
@@ -37,6 +38,23 @@ DATA_DIR.mkdir(exist_ok=True)
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+RATE_LIMIT_HINT = (
+    "Trade Republic rate-limited the login (HTTP 429). "
+    "This happens after several login attempts in a short window. "
+    "Wait ~15-30 minutes before trying again — further attempts can extend the block."
+)
+
+
+def _is_rate_limited(output: str) -> bool:
+    """Detect TR's 429 in pytr's error output."""
+    return (
+        "429" in output
+        and ("Too Many Requests" in output
+             or "auth/web/login" in output
+             or "HTTPError" in output)
+    )
+
+
 def login_with_code(code: str) -> None:
     """Pipe the 4-digit code to `pytr login`. Exits 11 if rejected."""
     proc = subprocess.run(
@@ -48,9 +66,11 @@ def login_with_code(code: str) -> None:
     )
     output = (proc.stdout or "") + (proc.stderr or "")
     if "Logged in" not in output:
+        if _is_rate_limited(output):
+            sys.stderr.write(f"\n⚠️  {RATE_LIMIT_HINT}\n")
+            sys.exit(21)
         sys.stderr.write("MFA login failed.\n")
         sys.stderr.write(output[-500:] + "\n")
-        # If the message indicates credentials are bad, exit 12; otherwise 11
         if "credentials" in output.lower() and "invalid" in output.lower():
             sys.exit(12)
         sys.exit(11)
@@ -75,6 +95,9 @@ def fetch_portfolio(non_interactive: bool) -> None:
     )
     combined = (proc.stdout + proc.stderr).decode("utf-8", errors="replace")
     if proc.returncode != 0:
+        if _is_rate_limited(combined):
+            sys.stderr.write(f"\n⚠️  {RATE_LIMIT_HINT}\n")
+            sys.exit(21)
         if (
             "Resuming websession failed" in combined
             or "EOFError" in combined

@@ -35,6 +35,7 @@ EXIT_CODE_MAP = {
     11: (401, "mfa_invalid"),
     12: (401, "auth_failed"),
     20: (502, "api_error"),
+    21: (429, "rate_limited"),
     30: (500, "config_error"),
 }
 

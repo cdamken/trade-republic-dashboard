@@ -54,6 +54,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path == "/setup_status":
             self._json(200, {"setup_complete": PYTR_CREDS.is_file()})
             return
+        # Don't expose the project root directory listing.
+        if self.path in ("/", "/app", "/app/"):
+            self.send_response(302)
+            self.send_header("Location", "/app/index.html")
+            self.end_headers()
+            return
         # Anything else: serve static files via the parent class
         super().do_GET()
 

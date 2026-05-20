@@ -46,12 +46,16 @@ RATE_LIMIT_HINT = (
 
 
 def _is_rate_limited(output: str) -> bool:
-    """Detect TR's 429 in pytr's error output."""
+    """Detect TR's HTTP 429 in pytr's error output.
+
+    Must match the *exact* signatures emitted by requests.HTTPError when TR
+    returns 429. Generic "429" substring matches are not enough — pytr's
+    normal output contains many numbers that can coincidentally include 429.
+    """
     return (
-        "429" in output
-        and ("Too Many Requests" in output
-             or "auth/web/login" in output
-             or "HTTPError" in output)
+        "429 Client Error" in output
+        or "HTTPError: 429" in output
+        or "Too Many Requests" in output
     )
 
 

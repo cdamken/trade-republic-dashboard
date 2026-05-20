@@ -40,6 +40,20 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
 .val { text-align: right; font-weight: 700; color: var(--green); }
 .date-cell { color: var(--muted); width: 130px; }
 
+/* Range selector pills (used on Net Worth chart) */
+.range-buttons { display: flex; gap: 6px; margin: 8px 0 12px; flex-wrap: wrap; }
+.range-buttons button {
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 5px 14px; font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+  letter-spacing: 0.5px;
+}
+.range-buttons button:hover { color: var(--text); border-color: var(--blue); }
+.range-buttons button.active {
+  background: var(--blue); color: var(--bg); border-color: var(--blue);
+}
+
 /* Cash Flow card */
 .cf-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px; margin-bottom: 24px; }
 .cf-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 24px; }
@@ -144,7 +158,15 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
   <div class="card">
     <h2>Net Worth Evolution</h2>
     <div class="stat" id="history-current">€0.00</div>
-    <div class="substat">Total portfolio value (positions + cash) over time</div>
+    <div class="substat" id="history-substat">Total portfolio value (positions + cash) over time</div>
+    <div class="range-buttons" id="history-range">
+      <button data-range="1W">1W</button>
+      <button data-range="1M">1M</button>
+      <button data-range="3M">3M</button>
+      <button data-range="6M">6M</button>
+      <button data-range="1Y">1Y</button>
+      <button data-range="ALL" class="active">All</button>
+    </div>
     <div class="chart-container" id="history-container">
       <canvas id="historyChart"></canvas>
     </div>
@@ -273,15 +295,47 @@ async function init() {
     options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#e8eef5', font: { size: 22, weight: 'bold' }, padding: 30 } } }, cutout: '65%' }
   });
 
-  // 2. History Chart — show real swings instead of a deceptive "drops to zero" look
-  const hist = data.history;
-  if (hist && hist.length > 0) {
-    document.getElementById('history-current').textContent =
-      '€' + hist[hist.length-1].value.toLocaleString(undefined, {minimumFractionDigits:2});
+  // 2. History Chart — with range selector (1W / 1M / 3M / 6M / 1Y / All)
+  let historyChartInstance = null;
+  const fullHistory = data.history || [];
 
-    // Compute a tight Y range so the actual variation is visible
-    // (default Chart.js auto-scaling can collapse the line visually toward 0
-    //  if the area fill is enabled). We pad by ~5% above/below the data.
+  function filterHistory(range) {
+    if (range === 'ALL' || fullHistory.length === 0) return fullHistory;
+    const daysMap = { '1W': 7, '1M': 30, '3M': 90, '6M': 180, '1Y': 365 };
+    const days = daysMap[range];
+    if (!days) return fullHistory;
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const filtered = fullHistory.filter(h => new Date(h.date) >= cutoff);
+    return filtered.length > 0 ? filtered : fullHistory.slice(-1);
+  }
+
+  function renderHistoryChart(range) {
+    const hist = filterHistory(range);
+    if (hist.length === 0) return;
+
+    // Update the headline number to reflect the selected window
+    const lastValue = hist[hist.length - 1].value;
+    const firstValue = hist[0].value;
+    document.getElementById('history-current').textContent =
+      '€' + lastValue.toLocaleString(undefined, {minimumFractionDigits:2});
+
+    // Show delta vs the first point of the range
+    if (hist.length > 1) {
+      const delta = lastValue - firstValue;
+      const pct = (delta / firstValue) * 100;
+      const sign = delta >= 0 ? '+' : '−';
+      const color = delta >= 0 ? 'var(--green)' : 'var(--red)';
+      const rangeLabel = range === 'ALL' ? 'all-time' : range;
+      document.getElementById('history-substat').innerHTML =
+        `<span style="color:${color}">${sign}€${Math.abs(delta).toLocaleString(undefined,{maximumFractionDigits:0})} (${sign}${Math.abs(pct).toFixed(2)}%)</span>` +
+        ` over the last ${rangeLabel} · ${hist.length} daily snapshots`;
+    } else {
+      document.getElementById('history-substat').textContent =
+        'Total portfolio value (positions + cash) over time';
+    }
+
+    // Tight Y range based on data in the visible window
     const values = hist.map(h => h.value);
     const minV = Math.min(...values);
     const maxV = Math.max(...values);
@@ -289,7 +343,8 @@ async function init() {
     const yMin = Math.max(0, Math.floor((minV - padding) / 1000) * 1000);
     const yMax = Math.ceil((maxV + padding) / 1000) * 1000;
 
-    new Chart(document.getElementById('historyChart'), {
+    if (historyChartInstance) historyChartInstance.destroy();
+    historyChartInstance = new Chart(document.getElementById('historyChart'), {
       type: 'line',
       data: {
         labels: hist.map(h => h.date),
@@ -298,7 +353,7 @@ async function init() {
           borderColor: '#60a5fa',
           borderWidth: 3,
           tension: 0.3,
-          fill: false,        // ← avoid the "falls to zero" visual illusion
+          fill: false,
           pointRadius: 0,
           pointHoverRadius: 5,
           pointHitRadius: 12,
@@ -316,11 +371,9 @@ async function init() {
         },
         scales: {
           y: {
-            min: yMin,        // ← explicit floor (not zero)
-            max: yMax,
+            min: yMin, max: yMax,
             ticks: {
-              color: '#e8eef5',
-              font: { size: 20, weight: 'bold' },
+              color: '#e8eef5', font: { size: 20, weight: 'bold' },
               padding: 12,
               callback: (v) => '€' + (v / 1000).toFixed(0) + 'k',
             },
@@ -332,6 +385,17 @@ async function init() {
           },
         },
       },
+    });
+  }
+
+  if (fullHistory.length > 0) {
+    renderHistoryChart('ALL');
+    document.querySelectorAll('#history-range button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#history-range button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderHistoryChart(btn.dataset.range);
+      });
     });
   }
 

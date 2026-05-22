@@ -329,11 +329,12 @@ def _exit_mfa_required(non_interactive: bool, reason: str) -> None:
 # --------------------------------------------------------------------------
 def fetch_portfolio(client: TrClient) -> dict[str, Any]:
     try:
-        # include_history=False: TR removed the portfolioAggregateHistory
-        # topic in protocol v31 without a known replacement. The dashboard
-        # reconstructs the net-worth chart from daily snapshots
-        # (DATA/net_worth_history.json) instead.
-        snap = tr_portfolio.snapshot(client, include_history=False)
+        # snapshot_full() does compactPortfolio + instrument-per-ISIN +
+        # ticker-per-ISIN on a single WS connection, so positions come back
+        # with names AND live prices. The simpler snapshot() returns only
+        # {instrumentId, netSize, averageBuyIn} and is no use for a dashboard
+        # that wants to render named rows with current value.
+        snap = tr_portfolio.snapshot_full(client)
     except SessionExpired:
         _exit_mfa_required(non_interactive=False, reason="Session expired during portfolio fetch")
     except RateLimited as e:  # pragma: no cover — usually only on login
@@ -359,10 +360,18 @@ def fetch_portfolio(client: TrClient) -> dict[str, Any]:
 
 
 def _shape_portfolio(snap: dict[str, Any]) -> dict[str, Any]:
-    """Map tr-api's raw TR JSON into the schema parse_pytr_output used to produce.
+    """Map tr-api's raw TR JSON into the schema the dashboard frontend expects.
 
-    We map field names defensively — TR has been known to rename keys in
-    minor backend updates, so we always go through .get() with fallbacks.
+    snap should come from tr_portfolio.snapshot_full(), so each position
+    already has {instrumentId, isin, name, netSize, averageBuyIn,
+    currentPrice}. TR returns numeric fields as decimal STRINGS — we cast
+    via _as_float to keep precision-y math sane.
+
+    A position lands in `zero_value_positions` when we genuinely couldn't
+    compute a current value (price=0 AND no value provided). A position
+    where the price wasn't resolved (ticker fan-out failed) but quantity
+    and avg cost are known still gets surfaced — we fall back to
+    avg_cost * qty so the user at least sees an estimate of buy cost.
     """
     p = (snap.get("portfolio") or {}) if isinstance(snap, dict) else {}
     cash_data = snap.get("cash") if isinstance(snap, dict) else None
@@ -371,26 +380,36 @@ def _shape_portfolio(snap: dict[str, Any]) -> dict[str, Any]:
     zero_positions: list[dict[str, Any]] = []
 
     for raw in (p.get("positions") or []):
-        qty = _as_float(raw.get("netSize") or raw.get("quantity"))
+        qty = _as_float(raw.get("netSize") or raw.get("virtualSize") or raw.get("quantity"))
         avg_cost = _as_float(raw.get("averageBuyIn") or raw.get("avgPrice"))
-        net_value = _as_float(raw.get("netValue") or raw.get("currentValue"))
-        # `currentPrice` is sometimes {value: x} and sometimes a scalar.
+
+        # `currentPrice` from snapshot_full is the scalar price string we
+        # picked from ticker.last/bid/ask. Older TR responses sometimes
+        # wrapped it as {"value": ...}; tolerate both.
         cp = raw.get("currentPrice")
         if isinstance(cp, dict):
-            current_price = _as_float(cp.get("value"))
+            current_price = _as_float(cp.get("value") or cp.get("price"))
         else:
             current_price = _as_float(cp)
-        if current_price == 0 and qty > 0:
-            current_price = net_value / qty if qty else 0.0
 
+        # TR ALSO sometimes ships a netValue directly — prefer that if
+        # present, otherwise compute price * qty.
+        net_value = _as_float(raw.get("netValue") or raw.get("currentValue"))
+        if net_value <= 0 and current_price > 0 and qty > 0:
+            net_value = current_price * qty
+        if current_price <= 0 and qty > 0 and net_value > 0:
+            current_price = net_value / qty
+
+        instrument_id = str(raw.get("instrumentId") or raw.get("isin") or "")
+        # instrumentId might be "ISIN.EXCHANGE"; ISIN is the part before the dot.
+        isin = str(raw.get("isin") or instrument_id.split(".", 1)[0])
         name = (raw.get("name") or raw.get("instrumentName") or "").strip()
-        instrument_id = raw.get("instrumentId") or raw.get("isin") or ""
-        # instrumentId is typically "ISIN.EXCHANGE"; ISIN is the part before the dot.
-        isin = (raw.get("isin") or instrument_id.split(".", 1)[0]).strip()
+        if not name:
+            name = isin  # fallback so the row is at least identifiable
 
         buy_cost = avg_cost * qty
-        pl_eur = net_value - buy_cost
-        pl_pct = (pl_eur / buy_cost * 100.0) if buy_cost else 0.0
+        pl_eur = net_value - buy_cost if net_value > 0 else 0.0
+        pl_pct = (pl_eur / buy_cost * 100.0) if (buy_cost and net_value > 0) else 0.0
 
         item = {
             "name": name[:25],          # match pytr's 25-char truncation
@@ -403,6 +422,9 @@ def _shape_portfolio(snap: dict[str, Any]) -> dict[str, Any]:
             "pl_eur": round(pl_eur, 2),
             "pl_pct": round(pl_pct, 2),
         }
+        # A "real" position is one we have at least qty+avg_cost for AND
+        # whose computed value is non-zero. Otherwise it's a placeholder
+        # (likely TR didn't return a ticker for it, e.g. a delisted bond).
         if net_value > 0:
             positions.append(item)
         else:

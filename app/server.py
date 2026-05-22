@@ -52,6 +52,7 @@ def _wipe_for_account_change(old_phone: str) -> None:
     previous identity so it can't leak into the new view:
       - the old tr-api profile dir (cookies, meta, active marker)
       - all generated data in DATA/ (portfolio, transactions, analytics, history)
+      - the in-flight login state (.pending_login.json), if any
     """
     import shutil
 
@@ -71,7 +72,9 @@ def _wipe_for_account_change(old_phone: str) -> None:
         except OSError:
             pass
 
-    # Wipe DATA folder contents (preserve the directory itself)
+    # Wipe DATA folder contents (preserve the directory itself). This also
+    # clears .pending_login.json so any in-flight push for the OLD phone
+    # can't be completed against the NEW phone.
     if DATA_DIR.is_dir():
         for f in DATA_DIR.iterdir():
             try:
@@ -96,7 +99,8 @@ def _wipe_for_account_change(old_phone: str) -> None:
 def _wipe_session_only(phone: str) -> None:
     """User kept the same phone but changed the PIN. Drop just the cookies so
     the next refresh forces a fresh login (which validates the new PIN). DATA
-    stays — it's still the same account."""
+    stays — it's still the same account. Also clear any in-flight push state
+    since the old PIN is no longer valid."""
     if phone:
         cookies_file = TR_API_DIR / "profiles" / phone / "cookies.txt"
         if cookies_file.is_file():
@@ -104,6 +108,14 @@ def _wipe_session_only(phone: str) -> None:
                 cookies_file.unlink()
             except OSError:
                 pass
+
+    # Drop any pending login (push that's mid-flight)
+    pending = DATA_DIR / ".pending_login.json"
+    if pending.is_file():
+        try:
+            pending.unlink()
+        except OSError:
+            pass
 
     # Legacy pytr cookies too
     pytr_dir = Path.home() / ".pytr"

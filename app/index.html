@@ -162,12 +162,6 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
     <button id="update-btn" class="update-btn" onclick="updateData()">
       <span class="spinner"></span><span class="icon">🔄</span><span class="label">Update Now</span>
     </button>
-    <button id="full-reload-btn" class="update-btn"
-            style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
-            onclick="updateDataFull()"
-            title="Erase the local cache (portfolio + transactions) and re-download everything from Trade Republic. Keeps your login.">
-      ↻ Full Reload
-    </button>
     <button class="update-btn" style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
             onclick="openSetupModal()" title="Change phone / PIN, or switch to a different account">
       ⚙️ Account
@@ -193,6 +187,20 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
            oninput="this.value=this.value.replace(/[^0-9]/g,'')"
            onkeydown="if(event.key==='Enter')submitMfa()">
     <div id="mfa-err" class="err-msg"></div>
+    <label for="mfa-full-reload"
+           style="display:flex; align-items:flex-start; gap:10px; cursor:pointer;
+                  background:rgba(255,255,255,0.03); border:1px solid var(--border);
+                  border-radius:10px; padding:12px 14px; margin-top:14px; margin-bottom:6px;
+                  font-size:13px; color:var(--muted); line-height:1.45;">
+      <input type="checkbox" id="mfa-full-reload"
+             style="margin-top:2px; width:18px; height:18px; accent-color:#3b82f6; flex-shrink:0;">
+      <span>
+        <strong style="color:var(--text);">↻ Full Reload</strong> — wipe the local cache
+        (portfolio + transaction history) and re-download everything from Trade Republic.<br>
+        <span style="opacity:.8;">Use this if the numbers look off. Takes ~1–3 min.
+        Your login is kept; you only enter the code once.</span>
+      </span>
+    </label>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeMfaModal()">Cancel</button>
       <button id="mfa-submit-btn" class="btn-submit" onclick="submitMfa()">Submit</button>
@@ -231,8 +239,12 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
 
 <!-- ============ Setup / Account Settings Modal ============ -->
 <!-- Used for both first-time setup AND changing credentials later. The title
-     and intro adapt based on whether ~/.pytr/credentials already exists. -->
-<div id="setup-modal" class="modal-backdrop">
+     and intro adapt based on whether ~/.pytr/credentials already exists.
+     Click-outside-to-close is only honoured in edit-existing mode (the
+     Cancel button is visible). First-time setup ignores the backdrop
+     click because there's nothing meaningful behind it yet. -->
+<div id="setup-modal" class="modal-backdrop"
+     onclick="if(event.target===this && document.getElementById('setup-cancel-btn').style.display !== 'none') closeSetupModal()">
   <div class="modal" style="max-width: 480px;">
     <h3 id="setup-title">👋 Welcome — first-time setup</h3>
     <p id="setup-intro">To connect to Trade Republic, this dashboard needs your TR <strong>phone number</strong> and <strong>PIN</strong>.</p>
@@ -256,6 +268,10 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
            onkeydown="if(event.key==='Enter')submitSetup()">
     <div id="setup-err" class="err-msg"></div>
     <div class="modal-actions">
+      <!-- Cancel is hidden in first-time setup mode (user MUST configure
+           something to use the dashboard); shown when editing existing
+           credentials via the ⚙ Account button. -->
+      <button id="setup-cancel-btn" class="btn-cancel" onclick="closeSetupModal()" style="display:none;">Cancel</button>
       <button id="setup-submit-btn" class="btn-submit" onclick="submitSetup()" style="width:100%;">Continue →</button>
     </div>
   </div>
@@ -465,12 +481,23 @@ async function openSetupModal() {
 
   const titleEl = document.getElementById('setup-title');
   const introEl = document.getElementById('setup-intro');
+  const cancelBtn = document.getElementById('setup-cancel-btn');
+  const submitBtn = document.getElementById('setup-submit-btn');
+
   if (status.setup_complete) {
+    // Edit-existing mode: show Cancel, narrow Submit, allow click-outside
+    // and ESC to dismiss.
     titleEl.textContent = '⚙️ Account settings';
     introEl.innerHTML = 'Change your TR phone number or PIN. Submit empty PIN to keep the current one only valid if you have nothing else to update.';
+    cancelBtn.style.display = '';
+    submitBtn.style.width = '';
   } else {
+    // First-time setup: user MUST configure something — no Cancel button,
+    // submit fills the whole row.
     titleEl.textContent = '👋 Welcome — first-time setup';
     introEl.innerHTML = 'To connect to Trade Republic, this dashboard needs your TR <strong>phone number</strong> and <strong>PIN</strong>.';
+    cancelBtn.style.display = 'none';
+    submitBtn.style.width = '100%';
   }
 
   const phoneInput = document.getElementById('setup-phone');
@@ -487,6 +514,28 @@ async function openSetupModal() {
 function closeSetupModal() {
   document.getElementById('setup-modal').classList.remove('open');
 }
+
+// Global ESC handler: closes whichever modal is on top, but never the
+// first-time setup modal (the user has nowhere to go without credentials).
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  const mfa = document.getElementById('mfa-modal');
+  if (mfa && mfa.classList.contains('open')) {
+    closeMfaModal();
+    return;
+  }
+  const reset = document.getElementById('reset-modal');
+  if (reset && reset.classList.contains('open')) {
+    closeResetModal();
+    return;
+  }
+  const setup = document.getElementById('setup-modal');
+  const cancelBtn = document.getElementById('setup-cancel-btn');
+  if (setup && setup.classList.contains('open')
+      && cancelBtn && cancelBtn.style.display !== 'none') {
+    closeSetupModal();
+  }
+});
 
 async function submitSetup() {
   const phone = document.getElementById('setup-phone').value.trim();
@@ -544,40 +593,18 @@ async function submitSetup() {
   }
 }
 
-// When the user clicks Full Reload, we remember it so that — if the
-// session is dead and the MFA modal opens — the eventual code-submit
-// also sends `full: true`. Cleared once an update finishes.
-let _pendingFull = false;
-
 async function updateData() {
-  _pendingFull = false;
-  return _runUpdate({ full: false, label: 'Updating…' });
-}
-
-async function updateDataFull() {
-  if (!confirm(
-    'Full Reload erases your local cache and re-downloads everything from ' +
-    'Trade Republic (~1–3 minutes, depending on transaction history).\n\n' +
-    'Your login is kept; you will not have to re-enter the PIN unless the ' +
-    'session has expired.\n\nContinue?'
-  )) return;
-  _pendingFull = true;
-  return _runUpdate({ full: true, label: 'Re-downloading everything…' });
-}
-
-async function _runUpdate(opts) {
-  setUpdateBtn(true, opts.label || 'Updating…');
+  setUpdateBtn(true, 'Updating…');
   try {
-    const r = await postUpdate(null, { full: opts.full });
+    const r = await postUpdate(null);
     if (r.http === 200) {
-      _pendingFull = false;
       showStatus('ok', '✓ Updated — reloading');
       setTimeout(() => location.reload(), 800);
       return;
     }
     if (r.state === 'mfa_required') {
       openMfaModal();
-      return;   // _pendingFull stays true so submitMfa() forwards it
+      return;
     }
     if (r.state === 'rate_limited') {
       showStatus('err', '⚠ Rate-limited by Trade Republic — wait 15–30 min and retry');
@@ -595,6 +622,10 @@ function openMfaModal() {
   document.getElementById('mfa-modal').classList.add('open');
   document.getElementById('mfa-err').classList.remove('show');
   document.getElementById('mfa-input').value = '';
+  // Reset the Full Reload checkbox every time the modal opens — it should
+  // be an explicit opt-in per session, not sticky.
+  const cb = document.getElementById('mfa-full-reload');
+  if (cb) cb.checked = false;
   setTimeout(() => document.getElementById('mfa-input').focus(), 100);
   setUpdateBtn(false);
 }
@@ -615,12 +646,12 @@ async function submitMfa() {
   const submitBtn = document.getElementById('mfa-submit-btn');
   submitBtn.disabled = true;
   submitBtn.textContent = 'Verifying…';
-  setUpdateBtn(true, _pendingFull ? 'Re-downloading everything…' : 'Updating…');
+  // Read the Full Reload checkbox once at submit time. If checked,
+  // server wipes DATA/* before running the fetch.
+  const fullReload = !!document.getElementById('mfa-full-reload')?.checked;
+  setUpdateBtn(true, fullReload ? 'Re-downloading everything…' : 'Updating…');
   try {
-    // Forward the full flag if the user originally clicked Full Reload —
-    // they're entering the code for the same operation.
-    const r = await postUpdate(code, { full: _pendingFull });
-    _pendingFull = false;
+    const r = await postUpdate(code, { full: fullReload });
     if (r.http === 200) {
       closeMfaModal();
       showStatus('ok', '✓ Updated — reloading');

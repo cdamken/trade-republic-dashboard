@@ -162,6 +162,12 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
     <button id="update-btn" class="update-btn" onclick="updateData()">
       <span class="spinner"></span><span class="icon">🔄</span><span class="label">Update Now</span>
     </button>
+    <button id="full-reload-btn" class="update-btn"
+            style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
+            onclick="updateDataFull()"
+            title="Erase the local cache (portfolio + transactions) and re-download everything from Trade Republic. Keeps your login.">
+      ↻ Full Reload
+    </button>
     <button class="update-btn" style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
             onclick="openSetupModal()" title="Change phone / PIN, or switch to a different account">
       ⚙️ Account
@@ -374,8 +380,10 @@ const showStatus = (kind, msg) => {
   if (kind === 'ok') setTimeout(() => { s.style.display = 'none'; }, 5000);
 };
 
-async function postUpdate(mfaCode) {
-  const body = mfaCode ? { mfa_code: mfaCode } : {};
+async function postUpdate(mfaCode, opts) {
+  const body = {};
+  if (mfaCode) body.mfa_code = mfaCode;
+  if (opts && opts.full) body.full = true;
   const res = await fetch('/update', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -536,18 +544,40 @@ async function submitSetup() {
   }
 }
 
+// When the user clicks Full Reload, we remember it so that — if the
+// session is dead and the MFA modal opens — the eventual code-submit
+// also sends `full: true`. Cleared once an update finishes.
+let _pendingFull = false;
+
 async function updateData() {
-  setUpdateBtn(true, 'Updating…');
+  _pendingFull = false;
+  return _runUpdate({ full: false, label: 'Updating…' });
+}
+
+async function updateDataFull() {
+  if (!confirm(
+    'Full Reload erases your local cache and re-downloads everything from ' +
+    'Trade Republic (~1–3 minutes, depending on transaction history).\n\n' +
+    'Your login is kept; you will not have to re-enter the PIN unless the ' +
+    'session has expired.\n\nContinue?'
+  )) return;
+  _pendingFull = true;
+  return _runUpdate({ full: true, label: 'Re-downloading everything…' });
+}
+
+async function _runUpdate(opts) {
+  setUpdateBtn(true, opts.label || 'Updating…');
   try {
-    const r = await postUpdate(null);
+    const r = await postUpdate(null, { full: opts.full });
     if (r.http === 200) {
+      _pendingFull = false;
       showStatus('ok', '✓ Updated — reloading');
       setTimeout(() => location.reload(), 800);
       return;
     }
     if (r.state === 'mfa_required') {
       openMfaModal();
-      return;
+      return;   // _pendingFull stays true so submitMfa() forwards it
     }
     if (r.state === 'rate_limited') {
       showStatus('err', '⚠ Rate-limited by Trade Republic — wait 15–30 min and retry');
@@ -585,9 +615,12 @@ async function submitMfa() {
   const submitBtn = document.getElementById('mfa-submit-btn');
   submitBtn.disabled = true;
   submitBtn.textContent = 'Verifying…';
-  setUpdateBtn(true, 'Updating…');
+  setUpdateBtn(true, _pendingFull ? 'Re-downloading everything…' : 'Updating…');
   try {
-    const r = await postUpdate(code);
+    // Forward the full flag if the user originally clicked Full Reload —
+    // they're entering the code for the same operation.
+    const r = await postUpdate(code, { full: _pendingFull });
+    _pendingFull = false;
     if (r.http === 200) {
       closeMfaModal();
       showStatus('ok', '✓ Updated — reloading');

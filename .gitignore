@@ -13,6 +13,10 @@ pytr_history
 *.tmp
 *.partial
 
+# Python venv used by tr-api (created on first dashboard.sh run)
+.venv/
+venv/
+
 # IDE / editor noise
 .idea/
 .vscode/

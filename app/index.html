@@ -163,14 +163,14 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
       <span class="spinner"></span><span class="icon">🔄</span><span class="label">Update Now</span>
     </button>
     <button class="update-btn" style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
-            onclick="openResetModal()" title="Erase this account and configure a new one">
-      ⚙️ Switch account
+            onclick="openSetupModal()" title="Change phone / PIN, or switch to a different account">
+      ⚙️ Account
     </button>
     <span id="update-status" class="update-status" style="display:none"></span>
   </div>
 </div>
 
-<p class="subtitle">Data extracted via pytr (WebSocket TR). <span id="ts"></span></p>
+<p class="subtitle">Data extracted via <a href="https://github.com/cdamken/tr-api" target="_blank" style="color:var(--muted); text-decoration:underline;">tr-api</a> (WebSocket TR). <span id="ts"></span></p>
 
 <!-- ============ MFA Modal ============ -->
 <div id="mfa-modal" class="modal-backdrop" onclick="if(event.target===this)closeMfaModal()">
@@ -223,15 +223,19 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
   </div>
 </div>
 
-<!-- ============ First-time Setup Wizard ============ -->
+<!-- ============ Setup / Account Settings Modal ============ -->
+<!-- Used for both first-time setup AND changing credentials later. The title
+     and intro adapt based on whether ~/.pytr/credentials already exists. -->
 <div id="setup-modal" class="modal-backdrop">
   <div class="modal" style="max-width: 480px;">
-    <h3>👋 Welcome — first-time setup</h3>
-    <p>To connect to Trade Republic, this dashboard needs your TR <strong>phone number</strong> and <strong>PIN</strong>.</p>
+    <h3 id="setup-title">👋 Welcome — first-time setup</h3>
+    <p id="setup-intro">To connect to Trade Republic, this dashboard needs your TR <strong>phone number</strong> and <strong>PIN</strong>.</p>
     <div class="hint">
       🔒 Stored locally in <code>~/.pytr/credentials</code> with permissions 0600.<br>
       🚫 Never sent anywhere except the official Trade Republic API.<br>
-      ⚠️ Plain text — same place the pytr CLI uses.
+      ↻ Changing the phone wipes the current dashboard data (so the new
+      account doesn't see stale holdings). Changing only the PIN keeps the
+      data but forces a fresh login.
     </div>
     <label style="display:block; color:var(--muted); font-size:12px; margin-bottom:6px; text-transform:uppercase; letter-spacing:1px; font-weight:600;">Phone (international format)</label>
     <input type="tel" id="setup-phone" placeholder="+4912345678"
@@ -429,19 +433,47 @@ async function submitReset() {
   }
 }
 
-// ============ First-time setup wizard ============
+// ============ Setup / account settings modal ============
+// Same modal handles first-time setup and later credential changes. The
+// /setup endpoint detects phone changes and wipes stale data automatically;
+// PIN-only changes wipe just the session.
 async function checkSetup() {
   try {
     const r = await fetch('/setup_status');
     const j = await r.json();
-    if (!j.setup_complete) openSetupModal();
+    if (!j.setup_complete) openSetupModal(/*configured*/ false, null);
   } catch (e) { /* server not ready yet — silent */ }
 }
 
-function openSetupModal() {
+async function openSetupModal() {
+  // Always re-query so we render the right copy: "welcome" first run,
+  // "account settings" once configured. Also pre-fills the phone field
+  // so the user can change just the PIN without retyping the number.
+  let status = { setup_complete: false, phone: null };
+  try {
+    const r = await fetch('/setup_status');
+    if (r.ok) status = await r.json();
+  } catch (_) {}
+
+  const titleEl = document.getElementById('setup-title');
+  const introEl = document.getElementById('setup-intro');
+  if (status.setup_complete) {
+    titleEl.textContent = '⚙️ Account settings';
+    introEl.innerHTML = 'Change your TR phone number or PIN. Submit empty PIN to keep the current one only valid if you have nothing else to update.';
+  } else {
+    titleEl.textContent = '👋 Welcome — first-time setup';
+    introEl.innerHTML = 'To connect to Trade Republic, this dashboard needs your TR <strong>phone number</strong> and <strong>PIN</strong>.';
+  }
+
+  const phoneInput = document.getElementById('setup-phone');
+  const pinInput = document.getElementById('setup-pin');
+  phoneInput.value = status.phone || '';
+  pinInput.value = '';   // never pre-fill the PIN
+
   document.getElementById('setup-modal').classList.add('open');
   document.getElementById('setup-err').classList.remove('show');
-  setTimeout(() => document.getElementById('setup-phone').focus(), 100);
+  // Focus PIN field if phone is already known; otherwise focus phone.
+  setTimeout(() => (status.phone ? pinInput : phoneInput).focus(), 100);
 }
 
 function closeSetupModal() {

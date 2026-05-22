@@ -36,6 +36,7 @@ import argparse
 import csv
 import json
 import sys
+import time
 import traceback
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -53,6 +54,11 @@ PORTFOLIO_JSON = DATA_DIR / "portfolio.json"
 PORTFOLIO_RAW_JSON = DATA_DIR / "portfolio_raw.json"   # for debugging the TR WS payload
 TX_CSV = DATA_DIR / "account_transactions.csv"
 LAST_UPDATE_FILE = DATA_DIR / "last_update.date"
+
+# Where we stash an in-flight login between the two /update HTTP requests.
+# Step 1 (no mfa code) writes the processId here; step 2 (with code) reads it.
+PENDING_LOGIN_FILE = DATA_DIR / ".pending_login.json"
+PENDING_LOGIN_TTL_SECONDS = 5 * 60  # TR's processId is usually valid ~60s; 5 min is generous
 
 PYTR_CREDS = Path.home() / ".pytr" / "credentials"
 
@@ -154,68 +160,160 @@ def ensure_profile(phone: str) -> Profile:
 
 
 # --------------------------------------------------------------------------
-# Login (only when --mfa-code is provided)
+# Login — two-step flow split across HTTP requests
 # --------------------------------------------------------------------------
-def perform_login(phone: str, pin: str, mfa_code: str) -> TrClient:
-    """Full programmatic login: WAF token → initiate → complete.
-
-    The 4-digit `mfa_code` is what TR pushes to the user's mobile app
-    after the initial POST. The dashboard collects it via the modal and
-    passes it here.
-    """
-    prof = ensure_profile(phone)
-    profiles.set_active(phone)
-
-    def code_provider(_init: auth.InitiateResult) -> str:
-        return mfa_code
-
+# The dashboard does login in two HTTP roundtrips:
+#
+#   1) POST /update {}
+#      Server runs tr_fetch.py with no --mfa-code. If cookies are stale, we
+#      call auth.initiate_login() (which makes TR push a 4-digit code to the
+#      user's mobile app) and persist the resulting processId in
+#      PENDING_LOGIN_FILE. We exit 10 (mfa_required) so the browser opens
+#      the code modal.
+#
+#   2) POST /update {"mfa_code": "1234"}
+#      Server runs tr_fetch.py with --mfa-code. We load the saved
+#      processId and call auth.complete_login(processId, code), which
+#      writes the session cookies. The pending-login file is then cleared.
+#
+# If the user clicks Update again while a pending login is still fresh
+# (TTL not elapsed), we DO NOT re-initiate (would invalidate the in-flight
+# push). Instead we just exit 10 again and the modal stays open.
+def _save_pending(phone: str, process_id: str) -> None:
+    payload = {"phone": phone, "process_id": process_id, "issued_at": int(time.time())}
+    PENDING_LOGIN_FILE.write_text(json.dumps(payload), encoding="utf-8")
     try:
-        auth.login_flow(prof, pin, code_provider)
-    except RateLimited as e:
-        sys.stderr.write(
-            f"\n⚠️  Trade Republic rate-limited this account.\n"
-            f"   Next attempt at: {e.next_attempt_at}\n"
-        )
-        if e.wait_seconds:
-            sys.stderr.write(f"   Wait ≈ {e.wait_seconds // 60} min.\n")
-        sys.exit(21)
-    except InvalidCredentials as e:
-        sys.stderr.write(f"Login rejected: {e}\n")
-        sys.exit(11)
-    except LoginError as e:
-        sys.stderr.write(f"Login failed: {e}\n")
-        sys.exit(20)
-
-    return TrClient(prof)
+        PENDING_LOGIN_FILE.chmod(0o600)
+    except OSError:
+        pass
 
 
-def get_authenticated_client(phone: str, mfa_code: str | None, non_interactive: bool) -> TrClient:
-    """Return an authenticated TrClient, or exit 10 if MFA is needed."""
-    prof = ensure_profile(phone)
-    profiles.set_active(phone)
-
-    if mfa_code is not None:
-        return perform_login(phone, _pin_for(phone), mfa_code)
-
-    # No MFA code: try existing cookies + ping.
+def _load_pending(phone: str) -> str | None:
+    if not PENDING_LOGIN_FILE.is_file():
+        return None
     try:
-        client = TrClient(prof)
-    except MissingSessionCookies:
-        _exit_mfa_required(non_interactive, "No saved cookies")
+        data = json.loads(PENDING_LOGIN_FILE.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
+    if data.get("phone") != phone:
+        return None
+    issued = int(data.get("issued_at") or 0)
+    if int(time.time()) - issued > PENDING_LOGIN_TTL_SECONDS:
+        return None
+    pid = data.get("process_id")
+    return pid if isinstance(pid, str) and pid else None
 
+
+def _clear_pending() -> None:
     try:
-        alive = account.ping(client)
-    except TrApiError as e:
-        sys.stderr.write(f"Network/API error during session ping: {e}\n")
-        sys.exit(20)
-    if not alive:
-        _exit_mfa_required(non_interactive, "Saved cookies were rejected (session expired)")
-    return client
+        PENDING_LOGIN_FILE.unlink(missing_ok=True)
+    except OSError:
+        pass
 
 
 def _pin_for(phone: str) -> str:
     _, pin = load_phone_pin()
     return pin
+
+
+def _trigger_push_and_exit(phone: str, pin: str) -> None:
+    """Step 1: call initiate_login (TR pushes the code) and exit 10."""
+    try:
+        init = auth.initiate_login(phone, pin)
+    except RateLimited as e:
+        sys.stderr.write(
+            f"⚠️  Rate-limited by Trade Republic. "
+            f"Retry at {e.next_attempt_at} "
+            f"(≈ {(e.wait_seconds or 0) // 60} min).\n"
+        )
+        sys.exit(21)
+    except InvalidCredentials as e:
+        sys.stderr.write(f"Bad credentials: {e}\n")
+        sys.exit(11)
+    except LoginError as e:
+        sys.stderr.write(f"Could not initiate login: {e}\n")
+        sys.exit(20)
+
+    _save_pending(phone, init.process_id)
+    sys.stderr.write(
+        f"📲 Push sent to your Trade Republic mobile app. "
+        f"Enter the 4-digit code in the dashboard modal.\n"
+        f"   processId: {init.process_id[:8]}…  expires in ~60s.\n"
+    )
+    sys.exit(10)
+
+
+def _complete_pending_or_die(phone: str, mfa_code: str) -> TrClient:
+    """Step 2: complete the in-flight login using the saved processId."""
+    process_id = _load_pending(phone)
+    if not process_id:
+        sys.stderr.write(
+            "No pending login for this phone (or it expired). "
+            "Submit the form without a code first to trigger a new push.\n"
+        )
+        sys.exit(10)
+
+    from tr_api import cookies as _c
+    prof = profiles.load(phone)
+    try:
+        result = auth.complete_login(process_id, mfa_code)
+    except InvalidCredentials as e:
+        sys.stderr.write(f"Wrong code: {e}\n")
+        sys.exit(11)
+    except RateLimited as e:
+        sys.stderr.write(f"⚠️  Rate-limited: {e}\n")
+        sys.exit(21)
+    except LoginError as e:
+        sys.stderr.write(f"Login failed: {e}\n")
+        sys.exit(20)
+
+    _c.save_to_file(result.cookies, prof.cookies_file)
+    _clear_pending()
+    return TrClient(prof)
+
+
+def get_authenticated_client(phone: str, mfa_code: str | None, non_interactive: bool) -> TrClient:
+    """Return an authenticated TrClient, or exit 10/11/20/21 along the way.
+
+    Routes:
+      - mfa_code provided  -> complete the pending login (step 2).
+      - no mfa_code, cookies still valid -> use them as-is.
+      - no mfa_code, cookies stale       -> initiate (push) and exit 10 (step 1).
+    """
+    prof = ensure_profile(phone)
+    profiles.set_active(phone)
+
+    if mfa_code is not None:
+        return _complete_pending_or_die(phone, mfa_code)
+
+    # Try existing cookies — if a recent login is still good, we're done.
+    try:
+        client = TrClient(prof)
+        try:
+            alive = account.ping(client)
+        except TrApiError as e:
+            sys.stderr.write(f"Network/API error during session ping: {e}\n")
+            sys.exit(20)
+        if alive:
+            return client
+    except MissingSessionCookies:
+        pass  # fall through to "trigger push"
+
+    # Cookies are missing or rejected. If a push has *already* been sent
+    # within the last few minutes, don't re-send another one (the previous
+    # push and modal are still in flight).
+    if _load_pending(phone) is not None:
+        sys.stderr.write(
+            "A 4-digit code was already pushed to your phone within the last "
+            "5 minutes. Enter it in the dashboard modal.\n"
+        )
+        sys.exit(10)
+
+    # Fresh login required — trigger a push and surface mfa_required.
+    pin = _pin_for(phone)
+    _trigger_push_and_exit(phone, pin)
+    # _trigger_push_and_exit always exits; this line just satisfies the type checker.
+    return None  # type: ignore[return-value]
 
 
 def _exit_mfa_required(non_interactive: bool, reason: str) -> None:

@@ -96,6 +96,24 @@ def _wipe_for_account_change(old_phone: str) -> None:
                     pass
 
 
+def _wipe_data_keep_session() -> None:
+    """Drop all locally derived data (DATA/*) but keep the user's
+    credentials and tr-api session cookies. Used by the 'Full Reload'
+    UI button: the user wants to re-download everything from TR but
+    doesn't want to re-authenticate."""
+    import shutil
+
+    if DATA_DIR.is_dir():
+        for f in DATA_DIR.iterdir():
+            try:
+                if f.is_dir():
+                    shutil.rmtree(f)
+                else:
+                    f.unlink()
+            except OSError:
+                pass
+
+
 def _wipe_session_only(phone: str) -> None:
     """User kept the same phone but changed the PIN. Drop just the cookies so
     the next refresh forces a fresh login (which validates the new PIN). DATA
@@ -193,10 +211,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 )
                 return
 
+        # Optional "full reload" flag from the UI: wipes the locally
+        # cached portfolio / transactions BEFORE re-fetching so we start
+        # from a clean slate. Cookies are preserved (this is not Switch
+        # Account), so the user doesn't have to re-authenticate.
+        force_full = bool(body.get("full"))
+        if force_full:
+            _wipe_data_keep_session()
+
         # Build subprocess command
         cmd = [sys.executable, str(FETCH_SCRIPT), "--non-interactive"]
         if mfa_code:
             cmd += ["--mfa-code", mfa_code]
+        if force_full:
+            # Forces tr_fetch to redownload the entire transactions history
+            # rather than the incremental window.
+            cmd += ["--full"]
 
         try:
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)

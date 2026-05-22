@@ -155,6 +155,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if any(p in self.requestline for p in ("/update", "/setup", "POST")):
             super().log_message(format, *args)
 
+    # Force the browser to revalidate every request. Without this, a stale
+    # cached HTML/JS makes a UI change invisible until the user does a hard
+    # reload — and silently causes weirdness like "Update Now did nothing"
+    # when the cached JS no longer matches the running server.
+    def end_headers(self):
+        path = getattr(self, "path", "")
+        if path.startswith("/app/") or path.startswith("/DATA/"):
+            self.send_header("Cache-Control", "no-store, must-revalidate")
+            self.send_header("Pragma", "no-cache")
+            self.send_header("Expires", "0")
+        super().end_headers()
+
     # ------------------------------------------------------------------ GET
     def do_GET(self):
         if self.path == "/setup_status":

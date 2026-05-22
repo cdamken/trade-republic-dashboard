@@ -93,21 +93,27 @@ except ImportError as e:  # pragma: no cover
 # --------------------------------------------------------------------------
 # Keep these strings in sync with what analyze_analytics.py looks for:
 #   Deposit, Removal, Tax Refund, Buy, Sell, Dividend, Interest
+# Verified against live TR responses (May 2026). CARD_TRANSACTION is what
+# TR emits for card spending now; older docs use card_successful_transaction.
+# We keep both for safety. Trades are classified after lookup via _classify_trade.
 EVENT_TYPE_MAP: dict[str, str] = {
-    # Cash in/out
+    # Cash in
     "INCOMING_TRANSFER":            "Deposit",
     "INCOMING_TRANSFER_DELEGATION": "Deposit",
     "PAYMENT_INBOUND":              "Deposit",
     "PAYMENT_INBOUND_SEPA_DIRECT_DEBIT": "Deposit",
-    "card_successful_transaction":  "Removal",   # card spending
     "card_refund":                  "Deposit",
+    "CARD_REFUND":                  "Deposit",
+    # Cash out / card spending
+    "CARD_TRANSACTION":             "Removal",
+    "card_successful_transaction":  "Removal",
     "OUTGOING_TRANSFER":            "Removal",
     "OUTGOING_TRANSFER_DELEGATION": "Removal",
     "PAYMENT_OUTBOUND":             "Removal",
     # Tax flows
     "ssp_tax_correction_invoice":   "Tax Refund",
     "TAX_REFUND":                   "Tax Refund",
-    # Trading (we look at orderType too — see _classify_trade)
+    # Trading (Buy vs Sell decided by _classify_trade — looks at amount sign)
     "TRADE_INVOICE":                "Trade",
     "ORDER_EXECUTED":               "Trade",
     # Income
@@ -225,7 +231,11 @@ def _exit_mfa_required(non_interactive: bool, reason: str) -> None:
 # --------------------------------------------------------------------------
 def fetch_portfolio(client: TrClient) -> dict[str, Any]:
     try:
-        snap = tr_portfolio.snapshot(client, include_history=True, history_range="1y")
+        # include_history=False: TR removed the portfolioAggregateHistory
+        # topic in protocol v31 without a known replacement. The dashboard
+        # reconstructs the net-worth chart from daily snapshots
+        # (DATA/net_worth_history.json) instead.
+        snap = tr_portfolio.snapshot(client, include_history=False)
     except SessionExpired:
         _exit_mfa_required(non_interactive=False, reason="Session expired during portfolio fetch")
     except RateLimited as e:  # pragma: no cover — usually only on login

@@ -192,17 +192,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         removed = []
         errors = []
 
-        # 1. pytr credentials + cookies
+        # 1. Credentials + cookies.
+        #    - ~/.pytr/credentials still stores phone+PIN (kept as source of truth).
+        #    - ~/.pytr/cookies.* — legacy pytr session files; remove if present.
+        #    - ~/.tr-api/ — new location for tr-api profiles + cookies.
         pytr_dir = Path.home() / ".pytr"
         if pytr_dir.is_dir():
             for f in pytr_dir.iterdir():
-                # Keep the directory itself; delete credential + cookie files
                 if f.name == "credentials" or f.name.startswith("cookies."):
                     try:
                         f.unlink()
                         removed.append(str(f.relative_to(Path.home())))
                     except Exception as e:
                         errors.append(f"{f.name}: {e}")
+
+        tr_api_dir = Path.home() / ".tr-api"
+        if tr_api_dir.is_dir():
+            try:
+                shutil.rmtree(tr_api_dir)
+                removed.append(".tr-api/ (tr-api profiles + cookies)")
+            except Exception as e:
+                errors.append(f".tr-api/: {e}")
 
         # 2. Project DATA/ contents (keep the directory itself; recreate it empty)
         data_dir = PROJECT_DIR / "DATA"

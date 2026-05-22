@@ -25,7 +25,15 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$PROJECT_DIR/app"
 DATA_DIR="$PROJECT_DIR/DATA"
 PORT="${TR_DASHBOARD_PORT:-8085}"
-PYTR_PATH="${PYTR_PATH:-$HOME/.local/bin/pytr}"
+
+# tr-api lives in its own repo. Override with TR_API_PATH if it's somewhere
+# unusual; otherwise we look for the sibling checkout, then fall back to
+# installing from PyPI.
+TR_API_PATH="${TR_API_PATH:-$PROJECT_DIR/../tr-api}"
+
+VENV_DIR="$PROJECT_DIR/.venv"
+PY="$VENV_DIR/bin/python"
+PIP="$VENV_DIR/bin/pip"
 
 LAST_UPDATE_FILE="$DATA_DIR/last_update.date"
 LOG_FILE="$DATA_DIR/last_update.log"
@@ -36,6 +44,27 @@ SERVER_PID="$DATA_DIR/server.pid"
 
 mkdir -p "$DATA_DIR"
 cd "$PROJECT_DIR"
+
+# ----------------------------------------------------------------------- python env
+# First-run-only: build .venv and install tr-api (+ playwright chromium for
+# the WAF token). Idempotent — subsequent runs just verify the import works.
+ensure_python_env() {
+    if [ ! -x "$PY" ]; then
+        echo "🐍 Creating Python venv at $VENV_DIR …"
+        python3 -m venv "$VENV_DIR"
+        "$PIP" install --quiet --upgrade pip >/dev/null
+    fi
+    if ! "$PY" -c "import tr_api" 2>/dev/null; then
+        echo "📦 Installing tr-api into the dashboard venv …"
+        if [ -d "$TR_API_PATH" ]; then
+            "$PIP" install --quiet -e "$TR_API_PATH[browser]"
+        else
+            "$PIP" install --quiet "tr-api[browser]"
+        fi
+        echo "🌐 Installing headless Chromium for tr-api (one-time) …"
+        "$PY" -m playwright install chromium >/dev/null
+    fi
+}
 
 # ----------------------------------------------------------------------- banners
 mfa_banner() {
@@ -123,8 +152,9 @@ download_transactions() {
 # ----------------------------------------------------------------------- processing
 process_data() {
     echo "⚙️  Processing portfolio + analytics..."
-    python3 "$APP_DIR/parse_pytr_output.py" "$PORTFOLIO_FILE"
-    python3 "$APP_DIR/analyze_analytics.py"
+    # parse_pytr_output.py is obsolete — tr_fetch.py now writes portfolio.json
+    # directly. We keep this stub for any old callers; analytics still applies.
+    "$PY" "$APP_DIR/analyze_analytics.py"
 }
 
 cleanup() {
@@ -137,13 +167,14 @@ cleanup() {
 
 # ----------------------------------------------------------------------- server
 start_server() {
+    ensure_python_env
     if lsof -Pi :$PORT -sTCP:LISTEN -t >/dev/null; then
         echo "🌐 Server already running at http://localhost:$PORT/app/index.html"
         open "http://localhost:$PORT/app/index.html" 2>/dev/null
         return
     fi
     echo "🚀 Starting local server on port $PORT..."
-    python3 "$APP_DIR/server.py" > "$SERVER_LOG" 2>&1 &
+    "$PY" "$APP_DIR/server.py" > "$SERVER_LOG" 2>&1 &
     echo $! > "$SERVER_PID"
     sleep 2
     echo "🌐 Server ready at http://localhost:$PORT/app/index.html"
@@ -173,10 +204,11 @@ stop_server() {
 # needs MFA, it prompts on the terminal directly. The MFA banner appears first
 # so the user knows what's happening.
 do_update() {
+    ensure_python_env
     set -o pipefail
     {
         mfa_banner
-        python3 "$APP_DIR/tr_fetch.py"
+        "$PY" "$APP_DIR/tr_fetch.py"
     } 2>&1 | tee "$LOG_FILE"
     local rc=${PIPESTATUS[0]}
     set +o pipefail
@@ -189,11 +221,12 @@ do_update() {
 }
 
 do_full() {
+    ensure_python_env
     echo "⚠️  FULL update — re-downloads portfolio + FULL transactions (~3 min)."
     set -o pipefail
     {
         mfa_banner
-        python3 "$APP_DIR/tr_fetch.py" --full
+        "$PY" "$APP_DIR/tr_fetch.py" --full
     } 2>&1 | tee "$LOG_FILE"
     local rc=${PIPESTATUS[0]}
     set +o pipefail

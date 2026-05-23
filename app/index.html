@@ -698,31 +698,42 @@ function hideProgressOverlay() {
 }
 
 async function updateData() {
+  // The first /update call decides between:
+  //   - cookies dead -> we get back mfa_required and open the modal.
+  //                     The modal owns the screen; no overlay here.
+  //   - cookies alive -> the fetch runs end-to-end. It can take ~30-60s.
+  //                      We show the overlay AFTER a 5s grace period so
+  //                      a fast refresh doesn't flash it gratuitously.
+  //
+  // We don't show the overlay sooner than that because if the server is
+  // going to come back with mfa_required (Playwright takes ~5s), the
+  // overlay would otherwise pop up just in time to hide the MFA modal
+  // (z-index 200 vs 100) — the exact bug that hid the TOTP prompt.
   setUpdateBtn(true, 'Updating…');
-  // No overlay yet — we don't know if MFA will be required. If the call
-  // returns mfa_required, the modal handles it and submitMfa() will turn
-  // on the overlay. If we go straight through (cookies still alive),
-  // we'll see a brief "updating" status and a quick overlay.
   let overlayShown = false;
-  const ensureOverlay = () => {
-    if (!overlayShown) { showProgressOverlay({ full: false }); overlayShown = true; }
+  const overlayDelay = setTimeout(() => {
+    showProgressOverlay({ full: false });
+    overlayShown = true;
+  }, 5500);
+  const cleanupOverlay = () => {
+    clearTimeout(overlayDelay);
+    if (overlayShown) { hideProgressOverlay(); overlayShown = false; }
   };
   try {
-    // Show the overlay after a short delay — long enough that an
-    // already-authenticated, fast fetch doesn't flash it gratuitously
-    // (cookies alive + cached snapshots can complete in <3 s).
-    const overlayDelay = setTimeout(ensureOverlay, 1500);
     const r = await postUpdate(null);
-    clearTimeout(overlayDelay);
     if (r.http === 200) {
-      ensureOverlay();
-      document.getElementById('progress-stage').textContent = '✓ Datos descargados — recargando…';
+      // If we never hit the overlay (fast cookies-alive path), don't bother
+      // showing it just to take it down. The reload feedback below is enough.
+      if (overlayShown) {
+        document.getElementById('progress-stage').textContent = '✓ Datos descargados — recargando…';
+      }
+      clearTimeout(overlayDelay);
       showStatus('ok', '✓ Updated — reloading');
       setTimeout(() => location.reload(), 800);
       return;
     }
+    cleanupOverlay();
     if (r.state === 'mfa_required') {
-      // Modal handles next step; no overlay here.
       openMfaModal();
       return;
     }
@@ -732,12 +743,9 @@ async function updateData() {
     }
     showStatus('err', '✗ ' + (r.detail || r.state || ('HTTP ' + r.http)));
   } catch (e) {
+    cleanupOverlay();
     showStatus('err', '✗ Network error');
   } finally {
-    if (overlayShown) {
-      // Only hide if we're not about to reload (success path keeps it up
-      // briefly while the page reloads to give visual continuity).
-    }
     setUpdateBtn(false);
   }
 }

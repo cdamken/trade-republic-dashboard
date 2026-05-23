@@ -112,6 +112,40 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
 .update-status.ok { background: rgba(74, 222, 128, 0.15); color: var(--green); }
 .update-status.err { background: rgba(248, 113, 113, 0.15); color: var(--red); }
 
+/* ----- progress overlay ----- */
+/* Full-screen dim shown while a /update fetch is in flight. The MFA modal
+   doesn't overlap it: MFA appears first; once the user submits the code,
+   MFA closes and this overlay takes over until the fetch finishes. */
+.progress-overlay {
+  position: fixed; inset: 0; background: rgba(15, 20, 25, 0.92);
+  display: none; align-items: center; justify-content: center;
+  z-index: 200; backdrop-filter: blur(8px);
+}
+.progress-overlay.show { display: flex; }
+.progress-box {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 32px; max-width: 540px; width: 92%;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  text-align: center;
+}
+.progress-box h2 { font-size: 22px; margin-bottom: 12px; color: var(--text); }
+.progress-box .progress-stage {
+  color: var(--text); font-size: 15px; margin-bottom: 8px; min-height: 22px;
+  transition: opacity 0.2s;
+}
+.progress-box .progress-hint {
+  color: var(--muted); font-size: 12px; line-height: 1.5;
+}
+.progress-box .progress-elapsed {
+  color: var(--muted); font-size: 11px; margin-top: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.progress-spinner {
+  width: 56px; height: 56px; margin: 8px auto 24px;
+  border: 4px solid var(--border); border-top-color: var(--blue);
+  border-radius: 50%; animation: spin 0.9s linear infinite;
+}
+
 .modal-backdrop {
   position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none;
   align-items: center; justify-content: center; z-index: 100; backdrop-filter: blur(4px);
@@ -274,6 +308,24 @@ th:nth-child(2), td:nth-child(2) { width: 15%; } /* ISIN */
       <button id="setup-cancel-btn" class="btn-cancel" onclick="closeSetupModal()" style="display:none;">Cancel</button>
       <button id="setup-submit-btn" class="btn-submit" onclick="submitSetup()" style="width:100%;">Continue →</button>
     </div>
+  </div>
+</div>
+
+<!-- ============ Progress overlay (during /update fetches) ============ -->
+<!-- Shown after the user has authenticated (or if no MFA was needed) and
+     the dashboard is downloading from TR. The stage message rotates
+     according to elapsed time so the user knows things are still alive
+     even when no log is streaming. -->
+<div class="progress-overlay" id="progress-overlay">
+  <div class="progress-box">
+    <div class="progress-spinner"></div>
+    <h2 id="progress-title">Actualizando tu portafolio</h2>
+    <div class="progress-stage" id="progress-stage">Conectando con Trade Republic…</div>
+    <div class="progress-hint">
+      Esto suele tardar entre 30 segundos y 2 minutos.<br>
+      Por favor, no cierres esta pestaña.
+    </div>
+    <div class="progress-elapsed" id="progress-elapsed">0s</div>
   </div>
 </div>
 
@@ -593,16 +645,84 @@ async function submitSetup() {
   }
 }
 
+// ============ Progress overlay ============
+// Shown during the in-flight /update fetch so the user has visual
+// feedback while TR is being scraped (can take 30–120 s for snapshot_full
+// + transactions). The stage label rotates based on elapsed time —
+// we don't stream the actual subprocess log because tr_fetch.py doesn't
+// print structural milestones and exposing it would just be noise.
+
+const PROGRESS_STAGES_NORMAL = [
+  { until: 5,   text: 'Conectando con Trade Republic…' },
+  { until: 15,  text: 'Verificando sesión…' },
+  { until: 45,  text: 'Descargando portafolio y precios…' },
+  { until: 90,  text: 'Resolviendo nombres e instrumentos…' },
+  { until: 150, text: 'Descargando movimientos recientes…' },
+  { until: Infinity, text: 'Ya casi terminamos…' },
+];
+const PROGRESS_STAGES_FULL = [
+  { until: 5,   text: 'Conectando con Trade Republic…' },
+  { until: 15,  text: 'Verificando sesión…' },
+  { until: 45,  text: 'Descargando portafolio y precios…' },
+  { until: 90,  text: 'Resolviendo nombres e instrumentos…' },
+  { until: 240, text: 'Descargando historial COMPLETO de transacciones…' },
+  { until: Infinity, text: 'Ya casi terminamos, gracias por la paciencia…' },
+];
+
+let _progressStartedAt = null;
+let _progressTimer = null;
+
+function showProgressOverlay(opts) {
+  const stages = (opts && opts.full) ? PROGRESS_STAGES_FULL : PROGRESS_STAGES_NORMAL;
+  document.getElementById('progress-overlay').classList.add('show');
+  document.getElementById('progress-title').textContent =
+    (opts && opts.full) ? 'Recargando todo desde cero' : 'Actualizando tu portafolio';
+  document.getElementById('progress-stage').textContent = stages[0].text;
+  document.getElementById('progress-elapsed').textContent = '0s';
+  _progressStartedAt = Date.now();
+  _progressTimer = setInterval(() => {
+    const elapsed = (Date.now() - _progressStartedAt) / 1000;
+    const stage = stages.find(s => elapsed < s.until) || stages[stages.length - 1];
+    const stageEl = document.getElementById('progress-stage');
+    if (stageEl.textContent !== stage.text) stageEl.textContent = stage.text;
+    document.getElementById('progress-elapsed').textContent =
+      elapsed < 60 ? `${Math.floor(elapsed)}s`
+                   : `${Math.floor(elapsed / 60)}m ${Math.floor(elapsed) % 60}s`;
+  }, 500);
+}
+
+function hideProgressOverlay() {
+  document.getElementById('progress-overlay').classList.remove('show');
+  if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
+  _progressStartedAt = null;
+}
+
 async function updateData() {
   setUpdateBtn(true, 'Updating…');
+  // No overlay yet — we don't know if MFA will be required. If the call
+  // returns mfa_required, the modal handles it and submitMfa() will turn
+  // on the overlay. If we go straight through (cookies still alive),
+  // we'll see a brief "updating" status and a quick overlay.
+  let overlayShown = false;
+  const ensureOverlay = () => {
+    if (!overlayShown) { showProgressOverlay({ full: false }); overlayShown = true; }
+  };
   try {
+    // Show the overlay after a short delay — long enough that an
+    // already-authenticated, fast fetch doesn't flash it gratuitously
+    // (cookies alive + cached snapshots can complete in <3 s).
+    const overlayDelay = setTimeout(ensureOverlay, 1500);
     const r = await postUpdate(null);
+    clearTimeout(overlayDelay);
     if (r.http === 200) {
+      ensureOverlay();
+      document.getElementById('progress-stage').textContent = '✓ Datos descargados — recargando…';
       showStatus('ok', '✓ Updated — reloading');
       setTimeout(() => location.reload(), 800);
       return;
     }
     if (r.state === 'mfa_required') {
+      // Modal handles next step; no overlay here.
       openMfaModal();
       return;
     }
@@ -614,6 +734,10 @@ async function updateData() {
   } catch (e) {
     showStatus('err', '✗ Network error');
   } finally {
+    if (overlayShown) {
+      // Only hide if we're not about to reload (success path keeps it up
+      // briefly while the page reloads to give visual continuity).
+    }
     setUpdateBtn(false);
   }
 }
@@ -650,29 +774,45 @@ async function submitMfa() {
   // server wipes DATA/* before running the fetch.
   const fullReload = !!document.getElementById('mfa-full-reload')?.checked;
   setUpdateBtn(true, fullReload ? 'Re-downloading everything…' : 'Updating…');
+
+  // Close the MFA modal and put up the progress overlay — the fetch
+  // that's about to run (snapshot_full + transactions) typically takes
+  // 30–120 s, so showing the user only a small spinner button would
+  // make them think the dashboard is frozen.
+  closeMfaModal();
+  showProgressOverlay({ full: fullReload });
+
   try {
     const r = await postUpdate(code, { full: fullReload });
     if (r.http === 200) {
-      closeMfaModal();
+      document.getElementById('progress-stage').textContent = '✓ Datos descargados — recargando…';
       showStatus('ok', '✓ Updated — reloading');
       setTimeout(() => location.reload(), 800);
-      return;
+      return;  // leave overlay up during the brief reload window
     }
+    // Anything other than 200: hide the overlay and reopen MFA with an error.
+    hideProgressOverlay();
     if (r.state === 'mfa_invalid' || r.state === 'mfa_required') {
+      openMfaModal();
       errEl.textContent = 'Wrong code. Check and try again.';
       errEl.classList.add('show');
       document.getElementById('mfa-input').select();
     } else if (r.state === 'auth_failed') {
-      errEl.textContent = 'Invalid pytr credentials. Check ~/.pytr/credentials.';
+      openMfaModal();
+      errEl.textContent = 'Invalid credentials. Check ~/.pytr/credentials.';
       errEl.classList.add('show');
     } else if (r.state === 'rate_limited') {
+      openMfaModal();
       errEl.textContent = '⚠ Trade Republic rate-limited login. Wait 15–30 min and retry.';
       errEl.classList.add('show');
     } else {
+      openMfaModal();
       errEl.textContent = r.detail || ('Error ' + r.http);
       errEl.classList.add('show');
     }
   } catch (e) {
+    hideProgressOverlay();
+    openMfaModal();
     errEl.textContent = 'Network error: ' + e.message;
     errEl.classList.add('show');
   } finally {

@@ -71,6 +71,7 @@ try:
         Profile,
         TrClient,
         account,
+        activity_log as tr_activity_log,
         auth,
         portfolio as tr_portfolio,
         profiles,
@@ -525,18 +526,31 @@ CSV_COLUMNS = ["Date", "Type", "Value", "Note", "ISIN", "Shares",
 
 
 def fetch_transactions(client: TrClient, force_full: bool) -> None:
+    """Fetch BOTH timelineTransactions (cash flow) and timelineActivityLog
+    (trades, dividends, corporate actions) and merge into one CSV.
+
+    Same shape as pytr's timeline export: a single CSV with every
+    Buy/Sell/Dividend/Removal/Deposit/Interest/Tax-Refund row. The two
+    streams are disjoint by eventType, so naïve concatenation is safe
+    (each event has a unique TR id, used as the dedupe key elsewhere).
+    """
     if force_full or not TX_CSV.exists() or not LAST_UPDATE_FILE.exists():
-        items = _safe_call(lambda: tr_transactions.fetch_all(client))
+        tx_items  = _safe_call(lambda: tr_transactions.fetch_all(client))
+        act_items = _safe_call(lambda: tr_activity_log.fetch_all(client))
+        items = tx_items + act_items
     else:
         try:
             last_str = LAST_UPDATE_FILE.read_text(encoding="utf-8").strip().split()[0]
             last = datetime.strptime(last_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except Exception:
-            items = _safe_call(lambda: tr_transactions.fetch_all(client))
+            tx_items  = _safe_call(lambda: tr_transactions.fetch_all(client))
+            act_items = _safe_call(lambda: tr_activity_log.fetch_all(client))
+            items = tx_items + act_items
         else:
             cutoff = last - timedelta(days=3)  # 3-day overlap to catch late settlements
-            items = _safe_call(lambda: tr_transactions.fetch_since(client, cutoff))
-            _merge_into_csv(items)
+            tx_items  = _safe_call(lambda: tr_transactions.fetch_since(client, cutoff))
+            act_items = _safe_call(lambda: tr_activity_log.fetch_since(client, cutoff))
+            _merge_into_csv(tx_items + act_items)
             return
 
     # Full mode: replace the file.

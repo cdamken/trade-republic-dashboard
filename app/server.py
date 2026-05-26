@@ -257,6 +257,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # Sanitize: only keep tail of stderr (may contain useful detail but not entire trace)
         last_stderr_line = (result.stderr.strip().splitlines() or [""])[-1][:200]
 
+        # Log every tr_fetch.py invocation result so debugging doesn't require
+        # the user to capture the JSON response from the browser. Goes to the
+        # server's own stdout/stderr, which dashboard.sh redirects to srv.log.
+        # `mfa_code_redacted` so we don't accidentally print 4-digit codes
+        # alongside their resulting status.
+        mfa_redacted = "yes" if mfa_code else "no"
+        full_flag   = "yes" if force_full else "no"
+        print(
+            f"[tr_fetch] exit={result.returncode} status={json_status} "
+            f"mfa_code={mfa_redacted} full={full_flag} "
+            f"stderr_tail={last_stderr_line!r}",
+            file=sys.stderr,
+            flush=True,
+        )
+
         payload = {"status": json_status}
         if http_status == 200:
             payload["output"] = result.stdout[-2000:]

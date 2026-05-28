@@ -172,6 +172,10 @@ dashboard.sh                     Launcher (start/stop/restart/update/full/reset)
 
 ## Recently resolved
 
+- **2026-05-28**: 'Documents' button + `POST /download_docs` endpoint.
+  Shells out to `tr-api docs download --out DATA/documents/`. Files
+  land in `DATA/documents/<YYYY>/<kind>/<file>.pdf`. Idempotent.
+  Verified end-to-end against real TR.
 - **2026-05-28**: `EVENT_TYPE_MAP` updated for TR's 2026 rename. CSV
   went from 331 rows to 5,979.
 - **2026-05-28**: Withdrawal vs Removal split — `net_capital_in` now

@@ -33,6 +33,7 @@ run automatically.
 from __future__ import annotations
 
 import argparse
+import asyncio
 import csv
 import json
 import sys
@@ -525,41 +526,104 @@ CSV_COLUMNS = ["Date", "Type", "Value", "Note", "ISIN", "Shares",
                "Fees", "Taxes", "ISIN2", "Shares2"]
 
 
+async def _paginate_topic_on_ws(ws, topic: str, *, cutoff=None, max_pages: int = 200):
+    """Paginate a single TR timeline topic on an EXISTING WS connection.
+
+    If `cutoff` is provided (a datetime), stops as soon as an item with
+    timestamp < cutoff is seen — same semantics as fetch_since.
+    """
+    items = []
+    cursor = None
+    for _ in range(max_pages):
+        payload = {"type": topic}
+        if cursor is not None:
+            payload["after"] = cursor
+        page = await ws.fetch_one(payload)
+        page_items = page.get("items") or []
+        if cutoff is not None:
+            for it in page_items:
+                ts_raw = it.get("timestamp") or it.get("eventTime") or ""
+                if isinstance(ts_raw, str) and ts_raw.endswith("Z"):
+                    ts_raw = ts_raw[:-1] + "+00:00"
+                try:
+                    ts = datetime.fromisoformat(ts_raw)
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    if ts < cutoff:
+                        return items
+                except (ValueError, TypeError):
+                    pass
+                items.append(it)
+        else:
+            items.extend(page_items)
+        cursor = (page.get("cursors") or {}).get("after")
+        if cursor is None:
+            return items
+    return items
+
+
 def fetch_transactions(client: TrClient, force_full: bool) -> None:
     """Fetch BOTH timelineTransactions (cash flow) and timelineActivityLog
-    (trades, dividends, corporate actions) and merge into one CSV.
+    (trades, dividends, corporate actions) on a SINGLE WebSocket connection
+    and merge into one CSV.
+
+    Why one WS, not two:
+      pytr subscribes to both topics back-to-back on the same WS (see
+      pytr/timeline.py). When we used tr_api.transactions.fetch_all +
+      tr_api.activity_log.fetch_all (two SEPARATE asyncio.run + WS), the
+      second topic consistently returned 0 items for at least Carlos's
+      account — TR appears to do something stateful per-session that
+      makes a fresh second WS see an empty activityLog. Doing both on
+      one WS (the pytr pattern) is what restores the trade history.
 
     Same shape as pytr's timeline export: a single CSV with every
-    Buy/Sell/Dividend/Removal/Deposit/Interest/Tax-Refund row. The two
-    streams are disjoint by eventType, so naïve concatenation is safe
-    (each event has a unique TR id, used as the dedupe key elsewhere).
+    Buy/Sell/Dividend/Removal/Deposit/Interest/Tax-Refund row.
     """
-    if force_full or not TX_CSV.exists() or not LAST_UPDATE_FILE.exists():
-        tx_items  = _safe_call(lambda: tr_transactions.fetch_all(client))
-        print(f"  timelineTransactions: {len(tx_items)} items", flush=True)
-        act_items = _safe_call(lambda: tr_activity_log.fetch_all(client))
-        print(f"  timelineActivityLog:  {len(act_items)} items", flush=True)
-        items = tx_items + act_items
-    else:
+    from tr_api.protocol import TrWebSocket
+    from tr_api import transactions as _tx_mod, activity_log as _act_mod
+
+    if not (force_full or not TX_CSV.exists() or not LAST_UPDATE_FILE.exists()):
+        # Incremental path — uses a cutoff stop predicate.
         try:
             last_str = LAST_UPDATE_FILE.read_text(encoding="utf-8").strip().split()[0]
-            last = datetime.strptime(last_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            cutoff = datetime.strptime(last_str, "%Y-%m-%d").replace(tzinfo=timezone.utc) - timedelta(days=3)
         except Exception:
-            tx_items  = _safe_call(lambda: tr_transactions.fetch_all(client))
-            print(f"  timelineTransactions: {len(tx_items)} items", flush=True)
-            act_items = _safe_call(lambda: tr_activity_log.fetch_all(client))
-            print(f"  timelineActivityLog:  {len(act_items)} items", flush=True)
-            items = tx_items + act_items
-        else:
-            cutoff = last - timedelta(days=3)  # 3-day overlap to catch late settlements
-            tx_items  = _safe_call(lambda: tr_transactions.fetch_since(client, cutoff))
-            print(f"  timelineTransactions: {len(tx_items)} items (since {cutoff:%Y-%m-%d})", flush=True)
-            act_items = _safe_call(lambda: tr_activity_log.fetch_since(client, cutoff))
-            print(f"  timelineActivityLog:  {len(act_items)} items (since {cutoff:%Y-%m-%d})", flush=True)
-            _merge_into_csv(tx_items + act_items)
-            return
+            cutoff = None
+    else:
+        cutoff = None
 
-    # Full mode: replace the file.
+    async def _go():
+        async with TrWebSocket(client.session.cookies) as ws:
+            tx_items = await _paginate_topic_on_ws(ws, _tx_mod.TOPIC, cutoff=cutoff)
+            print(
+                f"  timelineTransactions: {len(tx_items)} items"
+                + (f" (since {cutoff:%Y-%m-%d})" if cutoff else ""),
+                flush=True,
+            )
+            act_items = await _paginate_topic_on_ws(ws, _act_mod.TOPIC, cutoff=cutoff)
+            print(
+                f"  timelineActivityLog:  {len(act_items)} items"
+                + (f" (since {cutoff:%Y-%m-%d})" if cutoff else ""),
+                flush=True,
+            )
+            return tx_items, act_items
+
+    try:
+        tx_items, act_items = asyncio.run(_go())
+    except SessionExpired:
+        _exit_mfa_required(non_interactive=False, reason="Session expired during transactions fetch")
+    except TrApiError as e:
+        sys.stderr.write(f"Transactions fetch failed: {e}\n")
+        sys.exit(20)
+
+    items = tx_items + act_items
+
+    if cutoff is not None:
+        # Incremental — merge with what's already in CSV (dedupes by Date|Type|Value|Note).
+        _merge_into_csv(items)
+        return
+
+    # Full mode — replace the file.
     rows = [_row_from_tr_event(e) for e in items]
     rows = [r for r in rows if r]
     rows.sort(key=lambda r: r["Date"], reverse=True)

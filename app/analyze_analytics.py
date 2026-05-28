@@ -173,20 +173,63 @@ def process_analytics():
                     "Lifetime P/L can't be computed reliably."
                 )
 
-            # Net worth history (daily snapshot)
+            # Net worth history — reconstructed from CSV external flows.
+            #
+            # We can't know historical *market value* per day without
+            # historical position prices (TR doesn't expose them via the
+            # API we use). What we CAN compute exactly is the "cost-basis
+            # wealth" trajectory: the sum of external cash flows up to
+            # each day.
+            #
+            #   wealth_at_cost(day X) = Σ deposits + tax_refunds
+            #                          + dividends + interest
+            #                          − removals (card spending)
+            #
+            # Buys and sells don't move total wealth — they just shift
+            # between cash and positions — so we don't count them here.
+            #
+            # This line shows the user's capital-injection trajectory.
+            # Today's marker uses the actual market value (total_netvalue),
+            # which is higher than the cost-basis line by the accumulated
+            # portfolio appreciation.
             today = datetime.now().strftime('%Y-%m-%d')
-            history = []
-            if history_file.exists():
-                try:
-                    with open(history_file, 'r') as f:
-                        history = json.load(f)
-                except Exception:
-                    history = []
-            if history and history[-1]['date'] == today:
-                history[-1]['value'] = total_netvalue
-            else:
-                history.append({"date": today, "value": total_netvalue})
-            history = history[-180:]
+            daily_wealth = {}
+            running = 0.0
+            if csv_path.exists():
+                with open(csv_path, mode='r', encoding='utf-8') as f:
+                    reader = csv.DictReader(f, delimiter=';')
+                    rows = sorted(reader, key=lambda r: (r.get('Date') or ''))
+                    for row in rows:
+                        t_type = (row.get('Type') or '').strip()
+                        date = (row.get('Date') or '')[:10]
+                        if not date:
+                            continue
+                        try:
+                            val = float(row.get('Value') or '0')
+                        except (TypeError, ValueError):
+                            continue
+                        if t_type in ('Deposit', 'Tax Refund', 'Dividend', 'Interest'):
+                            running += abs(val)
+                        elif t_type == 'Removal':
+                            running -= abs(val)
+                        # Buy/Sell don't change total wealth (just shift
+                        # between cash and positions), so skip them.
+                        daily_wealth[date] = round(running, 2)
+
+            # Build the sorted history list of cost-basis daily values.
+            # We deliberately DO NOT replace the final row with today's
+            # actual market value — that would create a visually jarring
+            # vertical jump (cost basis ~€4k → market value ~€68k) that
+            # makes the rest of the trajectory unreadable. The current
+            # market value lives in its own KPI card at the top of the
+            # page; the chart stays focused on capital-injection history.
+            history = [{"date": d, "value": daily_wealth[d]} for d in sorted(daily_wealth.keys())]
+            # Ensure today is represented even if there were no events on it.
+            if history and history[-1]['date'] != today:
+                history.append({"date": today, "value": history[-1]['value']})
+            elif not history:
+                history.append({"date": today, "value": 0.0})
+            history = history[-365:]  # keep up to ~1 year
             with open(history_file, 'w') as f:
                 json.dump(history, f, indent=2)
             analytics_data["history"] = history

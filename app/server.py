@@ -463,6 +463,27 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json(400, {"status": "bad_request", "detail": "invalid JSON"})
                 return
 
+        # Fast pre-check: is the TR session still alive? Without this we'd
+        # kick off the multi-minute walk and silently fail mid-way with a
+        # ConnectionClosedError. Better to bail out in 1s with a clean
+        # auth_required and let the UI offer Update Now.
+        ping_cmd = [sys.executable, "-m", "tr_api.cli", "--json", "ping"]
+        try:
+            ping = subprocess.run(ping_cmd, capture_output=True, text=True, timeout=15)
+            ping_env = json.loads(ping.stdout or "{}")
+            if not ping_env.get("ok") or not ping_env.get("data", {}).get("alive"):
+                self._json(401, {
+                    "status": "auth_required",
+                    "detail": "Your Trade Republic session expired. "
+                              "Click 'Update Now' first to re-authenticate, "
+                              "then try Documents again.",
+                })
+                return
+        except Exception as e:
+            # Don't block the user if ping itself blows up — fall through
+            # and let the download attempt return whatever real error
+            print(f"[docs] pre-ping failed: {e}", file=sys.stderr, flush=True)
+
         out_dir = DATA_DIR / "documents"
         out_dir.mkdir(parents=True, exist_ok=True)
 

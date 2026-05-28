@@ -203,7 +203,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <button id="docs-btn" class="update-btn"
             style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
             onclick="downloadDocs()"
-            title="Download every PDF Trade Republic has issued for this account (trades, dividends, statements, tax docs)">
+            title="Download every PDF TR has issued (trades, dividends, statements, tax). Files go to DATA/documents/<year>/<kind>/.">
       📄 Documents
     </button>
     <button class="update-btn" style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
@@ -708,12 +708,14 @@ function hideProgressOverlay() {
 }
 
 async function downloadDocs() {
-  // Pulls every PDF Trade Republic has issued for this account into
-  // DATA/documents/<YYYY>/<kind>/. Idempotent: re-running only fetches
-  // missing files. Can take a few minutes on a fresh run (one HTTP per
-  // PDF + one timelineDetailV2 per event), so we lock the button and
-  // poll the user every 30s with a status line.
-  if (!confirm('Download every PDF (trades, dividends, statements, tax) into DATA/documents/?\n\nThis can take a few minutes on a first run. Re-runs only fetch missing files.')) {
+  // Bulk-download every PDF Trade Republic has issued for this account.
+  // Idempotent: re-runs only fetch missing files. Server pre-checks
+  // session liveness so we fail fast with auth_required when cookies died.
+  if (!confirm(
+    'Download every PDF (trades, dividends, statements, tax) into\n' +
+    'DATA/documents/<year>/<kind>/?\n\n' +
+    'First run can take a few minutes. Re-runs only fetch what is missing.'
+  )) {
     return;
   }
   const btn = document.getElementById('docs-btn');
@@ -721,31 +723,51 @@ async function downloadDocs() {
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner" style="display:inline-block"></span> Downloading…';
-  if (status) { status.style.display = ''; status.textContent = 'Walking timeline + downloading PDFs…'; }
+  if (status) { status.style.display = ''; status.className = 'update-status'; status.textContent = 'Walking timeline + downloading PDFs…'; }
   try {
     const r = await fetch('/download_docs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),  // empty = full history, all kinds
+      body: JSON.stringify({}),
     });
     const data = await r.json();
     if (r.ok && data.status === 'ok') {
       const c = data.counts || {};
-      const total = c.total || 0;
       const downloaded = c.downloaded || 0;
-      const skipped = c.skipped_existing || 0;
-      const errors = c.error || 0;
-      const msg = `✓ ${downloaded} new, ${skipped} already present` +
-                  (errors ? `, ${errors} errors` : '') +
-                  ` (of ${total} total) → ${data.out_dir}`;
-      if (status) status.textContent = msg;
-      alert(msg + '\n\nManifest: ' + (data.manifest || '(none)'));
+      const skipped    = c.skipped_existing || 0;
+      const errors     = c.error || 0;
+      const total      = c.total || 0;
+      const summary = `${downloaded} new, ${skipped} already present` +
+                      (errors ? `, ${errors} errors` : '') +
+                      ` (of ${total} total)`;
+      if (status) { status.className = 'update-status ok'; status.textContent = '✓ ' + summary; }
+      alert(
+        '✓ Documents downloaded\n\n' +
+        summary + '\n\n' +
+        'Saved to:\n' + (data.out_dir || '(unknown)') + '\n\n' +
+        'Each PDF lives at <year>/<kind>/<file>.pdf — open the folder in\n' +
+        'Finder/Explorer or browse via your file manager.'
+      );
     } else if (data.status === 'auth_required') {
-      alert('Your TR session expired. Run Update Now first to re-authenticate, then try Documents again.');
+      if (status) { status.className = 'update-status err'; status.textContent = 'Session expired'; }
+      const want = confirm(
+        'Your Trade Republic session expired.\n\n' +
+        'Click OK to re-authenticate now (we will open the security-code\n' +
+        'prompt — same flow as Update Now). Then try Documents again.'
+      );
+      if (want) {
+        // Re-use the existing Update Now flow which handles MFA push + code.
+        updateData();
+      }
+    } else if (data.status === 'rate_limited') {
+      if (status) { status.className = 'update-status err'; status.textContent = 'Rate limited'; }
+      alert('Trade Republic rate-limited us. Wait a few minutes and try again.');
     } else {
+      if (status) { status.className = 'update-status err'; status.textContent = 'Download failed'; }
       alert('Download failed: ' + (data.detail || data.status || 'unknown error'));
     }
   } catch (e) {
+    if (status) { status.className = 'update-status err'; status.textContent = 'Network error'; }
     alert('Download error: ' + e.message);
   } finally {
     btn.disabled = false;

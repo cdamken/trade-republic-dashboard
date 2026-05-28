@@ -77,7 +77,10 @@ th { background: rgba(255,255,255,0.03); color: var(--muted);
   font-weight: 600; cursor: pointer; user-select: none; }
 th:hover { color: var(--text); }
 tr:hover { background: rgba(255,255,255,0.02); }
-.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* width: 1% + nowrap = shrink-to-content so short numeric values don't
+   force the row to spread evenly across the table; the slack lands on
+   the Asset/ISIN columns instead. */
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; width: 1%; }
 .pos { color: var(--green); }
 .neg { color: var(--red); }
 

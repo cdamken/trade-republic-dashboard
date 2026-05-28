@@ -536,7 +536,9 @@ def fetch_transactions(client: TrClient, force_full: bool) -> None:
     """
     if force_full or not TX_CSV.exists() or not LAST_UPDATE_FILE.exists():
         tx_items  = _safe_call(lambda: tr_transactions.fetch_all(client))
+        print(f"  timelineTransactions: {len(tx_items)} items", flush=True)
         act_items = _safe_call(lambda: tr_activity_log.fetch_all(client))
+        print(f"  timelineActivityLog:  {len(act_items)} items", flush=True)
         items = tx_items + act_items
     else:
         try:
@@ -544,12 +546,16 @@ def fetch_transactions(client: TrClient, force_full: bool) -> None:
             last = datetime.strptime(last_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
         except Exception:
             tx_items  = _safe_call(lambda: tr_transactions.fetch_all(client))
+            print(f"  timelineTransactions: {len(tx_items)} items", flush=True)
             act_items = _safe_call(lambda: tr_activity_log.fetch_all(client))
+            print(f"  timelineActivityLog:  {len(act_items)} items", flush=True)
             items = tx_items + act_items
         else:
             cutoff = last - timedelta(days=3)  # 3-day overlap to catch late settlements
             tx_items  = _safe_call(lambda: tr_transactions.fetch_since(client, cutoff))
+            print(f"  timelineTransactions: {len(tx_items)} items (since {cutoff:%Y-%m-%d})", flush=True)
             act_items = _safe_call(lambda: tr_activity_log.fetch_since(client, cutoff))
+            print(f"  timelineActivityLog:  {len(act_items)} items (since {cutoff:%Y-%m-%d})", flush=True)
             _merge_into_csv(tx_items + act_items)
             return
 

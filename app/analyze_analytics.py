@@ -151,11 +151,27 @@ def process_analytics():
                 analytics_data["allocation"]["categories"].values()
             )
 
-            # Lifetime P/L (current value vs net capital injected from outside)
+            # Lifetime P/L (current value vs net capital injected from outside).
+            # When net_capital_in is non-positive — typically because the CSV
+            # is incomplete (timelineActivityLog gap → no deposits/dividends
+            # historically) — leave lifetime_pl as None so the UI can show a
+            # "—" / "incomplete data" placeholder instead of a misleading
+            # €0.00 (+0.00%) that looks like the user actually broke even.
             cf["current_value"] = total_netvalue
             if cf["net_capital_in"] > 0:
                 cf["lifetime_pl"] = total_netvalue - cf["net_capital_in"]
                 cf["lifetime_pl_pct"] = cf["lifetime_pl"] / cf["net_capital_in"] * 100
+            else:
+                cf["lifetime_pl"] = None
+                cf["lifetime_pl_pct"] = None
+                cf["lifetime_pl_note"] = (
+                    "Net capital in TR is non-positive — your transaction "
+                    "history is likely incomplete (TR splits trades and "
+                    "dividends across timelineTransactions and "
+                    "timelineActivityLog; if the latter returned empty, "
+                    "deposits and trade history can be missing). "
+                    "Lifetime P/L can't be computed reliably."
+                )
 
             # Net worth history (daily snapshot)
             today = datetime.now().strftime('%Y-%m-%d')
@@ -183,7 +199,10 @@ def process_analytics():
     print(f"   Removals out:       €{cf['removals']['total']:>10,.2f}  ({cf['removals']['count']} tx)")
     print(f"   Net capital in TR:  €{cf['net_capital_in']:>10,.2f}")
     print(f"   Current value:      €{cf['current_value']:>10,.2f}")
-    print(f"   Lifetime P/L:       €{cf['lifetime_pl']:>10,.2f}  ({cf['lifetime_pl_pct']:+.2f}%)")
+    if cf["lifetime_pl"] is None:
+        print(f"   Lifetime P/L:       —  (incomplete data, see analytics.json:cash_flow.lifetime_pl_note)")
+    else:
+        print(f"   Lifetime P/L:       €{cf['lifetime_pl']:>10,.2f}  ({cf['lifetime_pl_pct']:+.2f}%)")
 
 
 if __name__ == "__main__":

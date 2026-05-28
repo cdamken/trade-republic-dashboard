@@ -207,11 +207,22 @@ async function init() {
   document.getElementById('cf-net').textContent = fmtEur0(cf.net_capital_in || 0);
   document.getElementById('cf-current').textContent = fmtEur0(cf.current_value || 0);
 
-  const pl = cf.lifetime_pl || 0;
-  const plPct = cf.lifetime_pl_pct || 0;
-  document.getElementById('cf-pl').textContent = (pl >= 0 ? '+' : '−') + fmtEur0(Math.abs(pl));
-  document.getElementById('cf-pl-pct').textContent = (plPct >= 0 ? '+' : '') + plPct.toFixed(2) + '%';
-  document.getElementById('cf-pl-tile').classList.add(pl >= 0 ? 'pl-pos' : 'pl-neg');
+  // Lifetime P/L: null means analyze_analytics.py decided the data was too
+  // incomplete (net_capital_in <= 0) to compute meaningfully. Surface that
+  // explicitly rather than showing a misleading "€0.00 (+0.00%)".
+  if (cf.lifetime_pl === null || cf.lifetime_pl === undefined) {
+    document.getElementById('cf-pl').textContent = '—';
+    document.getElementById('cf-pl').style.fontSize = '24px';
+    document.getElementById('cf-pl-pct').textContent = 'incomplete data';
+    document.getElementById('cf-pl-pct').title = cf.lifetime_pl_note || '';
+    document.getElementById('cf-pl-pct').style.fontStyle = 'italic';
+  } else {
+    const pl = cf.lifetime_pl;
+    const plPct = cf.lifetime_pl_pct || 0;
+    document.getElementById('cf-pl').textContent = (pl >= 0 ? '+' : '−') + fmtEur0(Math.abs(pl));
+    document.getElementById('cf-pl-pct').textContent = (plPct >= 0 ? '+' : '') + plPct.toFixed(2) + '%';
+    document.getElementById('cf-pl-tile').classList.add(pl >= 0 ? 'pl-pos' : 'pl-neg');
+  }
 
   // Trading totals (raw numbers)
   document.getElementById('cf-buys').textContent = fmtEur0(cf.buys?.total || 0);

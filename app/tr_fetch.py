@@ -133,17 +133,31 @@ EVENT_TYPE_MAP: dict[str, str] = {
     "PAYMENT_INBOUND_SEPA_DIRECT_DEBIT":   "Deposit",
     "card_refund":                         "Deposit",
 
-    # --- Cash out / card spending -----------------------------------------
+    # --- Cash out: card spending (consumption) ---------------------------
+    # CARD_TRANSACTION is lifestyle consumption: bakery, supermarket, fuel.
+    # The money leaves your wealth entirely. Tracked separately from
+    # Withdrawal (below) so analytics can show "money you put into TR
+    # for investing" net of "money you took back to your main bank"
+    # without conflating it with day-to-day spending.
     "CARD_TRANSACTION":                    "Removal",
-    "BANK_TRANSACTION_OUTGOING":           "Removal",
-    "BANK_TRANSACTION_OUTGOING_DIRECT_DEBIT": "Removal",
-    "BANK_TRANSACTION_OUTGOING_SCHEDULED": "Removal",
     "CRYPTO_TRANSFER_NETWORK_FEE":         "Removal",
     # legacy
     "card_successful_transaction":         "Removal",
-    "OUTGOING_TRANSFER":                   "Removal",
-    "OUTGOING_TRANSFER_DELEGATION":        "Removal",
-    "PAYMENT_OUTBOUND":                    "Removal",
+
+    # --- Cash out: withdrawals back to your main bank -------------------
+    # BANK_TRANSACTION_OUTGOING* is SEPA / direct debit / scheduled
+    # transfers from TR to a non-TR account. Typically the user's own
+    # bank, but generically: money leaves TR's balance and goes to
+    # another bank. It's still the user's money — just in a different
+    # account — so analytics treats it as a withdrawal of capital from
+    # the TR investment account, not consumption.
+    "BANK_TRANSACTION_OUTGOING":           "Withdrawal",
+    "BANK_TRANSACTION_OUTGOING_DIRECT_DEBIT": "Withdrawal",
+    "BANK_TRANSACTION_OUTGOING_SCHEDULED": "Withdrawal",
+    # legacy
+    "OUTGOING_TRANSFER":                   "Withdrawal",
+    "OUTGOING_TRANSFER_DELEGATION":        "Withdrawal",
+    "PAYMENT_OUTBOUND":                    "Withdrawal",
 
     # --- Tax flows --------------------------------------------------------
     "SSP_TAX_CORRECTION":                  "Tax Refund",

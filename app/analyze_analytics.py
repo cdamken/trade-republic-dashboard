@@ -26,20 +26,30 @@ def process_analytics():
 
     analytics_data = {
         "cash_flow": {
-            # External flows (TR ↔ outside world)
-            "deposits":      {"count": 0, "total": 0.0},
-            "removals":      {"count": 0, "total": 0.0},  # Card spending (out)
-            "tax_refunds":   {"count": 0, "total": 0.0},
-            # Internal trading totals (just the raw sums — no chart needed)
+            # Money IN (you to TR, or TR paying you)
+            "deposits":      {"count": 0, "total": 0.0},  # external bank → TR
+            "tax_refunds":   {"count": 0, "total": 0.0},  # Finanzamt → TR
+            # Money OUT — split into two distinct concepts:
+            #   removals    = card spending (CONSUMPTION, lifestyle)
+            #   withdrawals = transfers from TR back to your own bank
+            #                 (still your money, just in a different account)
+            "removals":      {"count": 0, "total": 0.0},
+            "withdrawals":   {"count": 0, "total": 0.0},
+            # Internal trading totals (raw sums — no chart needed)
             "buys":          {"count": 0, "total": 0.0},
             "sells":         {"count": 0, "total": 0.0},
             # Computed
-            "net_capital_in":  0.0,  # deposits + tax_refunds − removals
-            "net_traded":      0.0,  # buys − sells (money still parked in positions)
+            "net_capital_in":  0.0,  # deposits + tax_refunds − withdrawals
+                                     # ("how much of my net worth I dedicated
+                                     #  to investing in TR right now")
+            "net_traded":      0.0,  # buys − sells
             "current_value":   0.0,  # total_netvalue (portfolio + cash)
-            "lifetime_pl":     0.0,  # current_value − net_capital_in
+            # lifetime_pl = current_value + card_spending − net_capital_in − investment_income
+            #             = "gain from price appreciation on the capital I've
+            #                committed to TR, ignoring lifestyle spending and
+            #                investment-income receipts"
+            "lifetime_pl":     0.0,
             "lifetime_pl_pct": 0.0,
-            # Monthly trend (sorted YYYY-MM, external flows only)
             "monthly": [],
         },
         "dividends": {
@@ -58,7 +68,7 @@ def process_analytics():
     # 1. Parse CSV — only external cash flows + dividends section
     # =========================================================================
     monthly_flow = defaultdict(lambda: {
-        "deposits": 0.0, "removals": 0.0, "tax_refunds": 0.0,
+        "deposits": 0.0, "removals": 0.0, "withdrawals": 0.0, "tax_refunds": 0.0,
     })
 
     if csv_path.exists():
@@ -84,6 +94,10 @@ def process_analytics():
                     cf["removals"]["count"] += 1
                     cf["removals"]["total"] += abs_val
                     if month: monthly_flow[month]["removals"] += abs_val
+                elif t_type == "Withdrawal":
+                    cf["withdrawals"]["count"] += 1
+                    cf["withdrawals"]["total"] += abs_val
+                    if month: monthly_flow[month]["withdrawals"] += abs_val
                 elif t_type == "Tax Refund":
                     cf["tax_refunds"]["count"] += 1
                     cf["tax_refunds"]["total"] += abs_val
@@ -110,19 +124,27 @@ def process_analytics():
         analytics_data["dividends"]["recent"] = analytics_data["dividends"]["recent"][:10]
 
     cf = analytics_data["cash_flow"]
+    # "Net capital in TR" = capital you've put into TR for investing, net
+    # of withdrawals back to your main bank. Card spending is NOT
+    # subtracted here — it's lifestyle consumption funded from the TR
+    # cash balance, not a reduction of the investing commitment.
     cf["net_capital_in"] = (
         cf["deposits"]["total"]
         + cf["tax_refunds"]["total"]
-        - cf["removals"]["total"]
+        - cf["withdrawals"]["total"]
     )
     cf["net_traded"] = cf["buys"]["total"] - cf["sells"]["total"]
     for m in sorted(monthly_flow.keys()):
         d = monthly_flow[m]
-        net = d["deposits"] + d["tax_refunds"] - d["removals"]
+        # Monthly net flow reflects everything coming in vs. everything
+        # going out (including both withdrawals AND card spending) so the
+        # bar chart shows the full picture per month.
+        net = d["deposits"] + d["tax_refunds"] - d["removals"] - d["withdrawals"]
         cf["monthly"].append({
             "month": m,
             "deposits": round(d["deposits"], 2),
             "removals": round(d["removals"], 2),
+            "withdrawals": round(d["withdrawals"], 2),
             "tax_refunds": round(d["tax_refunds"], 2),
             "net_flow": round(net, 2),
         })
@@ -151,15 +173,36 @@ def process_analytics():
                 analytics_data["allocation"]["categories"].values()
             )
 
-            # Lifetime P/L (current value vs net capital injected from outside).
-            # When net_capital_in is non-positive — typically because the CSV
-            # is incomplete (timelineActivityLog gap → no deposits/dividends
-            # historically) — leave lifetime_pl as None so the UI can show a
-            # "—" / "incomplete data" placeholder instead of a misleading
-            # €0.00 (+0.00%) that looks like the user actually broke even.
+            # Lifetime P/L = how much your positions appreciated on the
+            # capital you committed to TR, ignoring lifestyle spending
+            # and dividend/interest income.
+            #
+            #   lifetime_pl = current_value + card_spending
+            #                 − net_capital_in − investment_income
+            #
+            # Intuition: the value sitting in TR today, plus the money
+            # you've already spent on card consumption (because that
+            # spending came from the same pool of capital you committed),
+            # minus the actual net capital you put in and minus
+            # dividends/interest receipts (which are returns ON capital,
+            # not capital itself). Whatever's left is pure price
+            # appreciation on the portfolio.
+            #
+            # When net_capital_in is non-positive — typically because the
+            # CSV is incomplete (timelineActivityLog gap → missing
+            # deposits/dividends history) — set lifetime_pl to None so
+            # the UI shows "—" instead of a misleading €0.00.
             cf["current_value"] = total_netvalue
+            investment_income = (
+                analytics_data["dividends"]["total_received"] or 0.0
+            )
             if cf["net_capital_in"] > 0:
-                cf["lifetime_pl"] = total_netvalue - cf["net_capital_in"]
+                cf["lifetime_pl"] = (
+                    total_netvalue
+                    + cf["removals"]["total"]      # add back card spending
+                    - cf["net_capital_in"]
+                    - investment_income
+                )
                 cf["lifetime_pl_pct"] = cf["lifetime_pl"] / cf["net_capital_in"] * 100
             else:
                 cf["lifetime_pl"] = None

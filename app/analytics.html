@@ -87,17 +87,22 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
       <div class="sub"><span id="cf-refunds-count">0</span> transactions</div>
     </div>
     <div class="cf-tile out">
-      <div class="label">Card spending (out)</div>
+      <div class="label">Withdrawals (to your bank)</div>
+      <div class="value" id="cf-withdrawals" style="color: #fbbf24;">€0</div>
+      <div class="sub"><span id="cf-withdrawals-count">0</span> transactions</div>
+    </div>
+    <div class="cf-tile out">
+      <div class="label">Card spending (consumption)</div>
       <div class="value" id="cf-removals">€0</div>
       <div class="sub"><span id="cf-removals-count">0</span> transactions</div>
     </div>
+  </div>
+  <div class="cf-grid">
     <div class="cf-tile">
       <div class="label">Net capital in TR</div>
       <div class="value" id="cf-net" style="color: var(--blue);">€0</div>
-      <div class="sub">Inflows − Outflows</div>
+      <div class="sub">Deposits + Tax refunds − Withdrawals</div>
     </div>
-  </div>
-  <div class="cf-grid">
     <div class="cf-tile">
       <div class="label">Current value (portfolio + cash)</div>
       <div class="value" id="cf-current" style="color: var(--text);">€0</div>
@@ -112,15 +117,12 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
       <div class="value" id="cf-avg-month" style="color: var(--text); font-size: 24px;">€0</div>
       <div class="sub" id="cf-month-count">0 months</div>
     </div>
-    <div class="cf-tile">
-      <div class="label">Last deposit</div>
-      <div class="value" id="cf-last-deposit" style="color: var(--text); font-size: 20px;">—</div>
-      <div class="sub" id="cf-last-deposit-date">—</div>
-    </div>
   </div>
   <div class="cf-formula">
-    <strong>Net capital in TR</strong> = Deposits + Tax refunds − Card spending.
-    <strong>Lifetime P/L</strong> = Current value − Net capital in TR. Reflects real gains/losses on what actually remains working inside the wealth.
+    <strong>Withdrawals</strong> are money moved from TR back to your own bank (still your money, just elsewhere).
+    <strong>Card spending</strong> is lifestyle consumption funded from your TR cash balance.
+    <strong>Net capital in TR</strong> = Deposits + Tax refunds − Withdrawals (the money you've committed to TR for investing).
+    <strong>Lifetime P/L</strong> = Current value + Card spending − Net capital in TR − Investment income. Pure price appreciation on the capital you've committed.
   </div>
 
   <!-- Trading totals (raw numbers, no chart) -->
@@ -204,6 +206,13 @@ async function init() {
   document.getElementById('cf-refunds-count').textContent = cf.tax_refunds?.count || 0;
   document.getElementById('cf-removals').textContent = fmtEur0(cf.removals?.total || 0);
   document.getElementById('cf-removals-count').textContent = cf.removals?.count || 0;
+  // New Withdrawal tile (introduced 2026-05-28 — splits "Removal" into
+  // bank withdrawals and lifestyle card spending).
+  const wEl = document.getElementById('cf-withdrawals');
+  if (wEl) {
+    wEl.textContent = fmtEur0(cf.withdrawals?.total || 0);
+    document.getElementById('cf-withdrawals-count').textContent = cf.withdrawals?.count || 0;
+  }
   document.getElementById('cf-net').textContent = fmtEur0(cf.net_capital_in || 0);
   document.getElementById('cf-current').textContent = fmtEur0(cf.current_value || 0);
 
@@ -240,8 +249,13 @@ async function init() {
 
     const lastDepMonth = [...monthly].reverse().find(m => m.deposits > 0);
     if (lastDepMonth) {
-      document.getElementById('cf-last-deposit').textContent = fmtEur0(lastDepMonth.deposits);
-      document.getElementById('cf-last-deposit-date').textContent = lastDepMonth.month;
+      // Tile dropped in the 2026-05-28 refactor; guard for null in case
+      // the older template is still cached on a client.
+      const ldEl = document.getElementById('cf-last-deposit');
+      if (ldEl) {
+        ldEl.textContent = fmtEur0(lastDepMonth.deposits);
+        document.getElementById('cf-last-deposit-date').textContent = lastDepMonth.month;
+      }
     }
 
     // Cumulative net capital (running sum of monthly net flows) — continues
@@ -258,9 +272,10 @@ async function init() {
       data: {
         labels: monthly.map(m => m.month),
         datasets: [
-          { label: 'Deposits',      data: monthly.map(m => m.deposits),    backgroundColor: '#4ade80', borderRadius: 4, stack: 'in' },
-          { label: 'Tax refunds',   data: monthly.map(m => m.tax_refunds), backgroundColor: '#60a5fa', borderRadius: 4, stack: 'in' },
-          { label: 'Card spending', data: monthly.map(m => -m.removals),   backgroundColor: '#f87171', borderRadius: 4, stack: 'out' },
+          { label: 'Deposits',      data: monthly.map(m => m.deposits),                  backgroundColor: '#4ade80', borderRadius: 4, stack: 'in' },
+          { label: 'Tax refunds',   data: monthly.map(m => m.tax_refunds),               backgroundColor: '#60a5fa', borderRadius: 4, stack: 'in' },
+          { label: 'Withdrawals',   data: monthly.map(m => -(m.withdrawals || 0)),        backgroundColor: '#fbbf24', borderRadius: 4, stack: 'out' },
+          { label: 'Card spending', data: monthly.map(m => -m.removals),                  backgroundColor: '#f87171', borderRadius: 4, stack: 'out' },
           {
             label: 'Cumulative net capital',
             type: 'line',

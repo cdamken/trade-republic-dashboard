@@ -200,6 +200,12 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <button id="update-btn" class="update-btn" onclick="updateData()">
       <span class="spinner"></span><span class="icon">🔄</span><span class="label">Update Now</span>
     </button>
+    <button id="docs-btn" class="update-btn"
+            style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
+            onclick="downloadDocs()"
+            title="Download every PDF Trade Republic has issued for this account (trades, dividends, statements, tax docs)">
+      📄 Documents
+    </button>
     <button class="update-btn" style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
             onclick="openSetupModal()" title="Change phone / PIN, or switch to a different account">
       ⚙️ Account
@@ -699,6 +705,52 @@ function hideProgressOverlay() {
   document.getElementById('progress-overlay').classList.remove('show');
   if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
   _progressStartedAt = null;
+}
+
+async function downloadDocs() {
+  // Pulls every PDF Trade Republic has issued for this account into
+  // DATA/documents/<YYYY>/<kind>/. Idempotent: re-running only fetches
+  // missing files. Can take a few minutes on a fresh run (one HTTP per
+  // PDF + one timelineDetailV2 per event), so we lock the button and
+  // poll the user every 30s with a status line.
+  if (!confirm('Download every PDF (trades, dividends, statements, tax) into DATA/documents/?\n\nThis can take a few minutes on a first run. Re-runs only fetch missing files.')) {
+    return;
+  }
+  const btn = document.getElementById('docs-btn');
+  const status = document.getElementById('update-status');
+  const orig = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="display:inline-block"></span> Downloading…';
+  if (status) { status.style.display = ''; status.textContent = 'Walking timeline + downloading PDFs…'; }
+  try {
+    const r = await fetch('/download_docs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),  // empty = full history, all kinds
+    });
+    const data = await r.json();
+    if (r.ok && data.status === 'ok') {
+      const c = data.counts || {};
+      const total = c.total || 0;
+      const downloaded = c.downloaded || 0;
+      const skipped = c.skipped_existing || 0;
+      const errors = c.error || 0;
+      const msg = `✓ ${downloaded} new, ${skipped} already present` +
+                  (errors ? `, ${errors} errors` : '') +
+                  ` (of ${total} total) → ${data.out_dir}`;
+      if (status) status.textContent = msg;
+      alert(msg + '\n\nManifest: ' + (data.manifest || '(none)'));
+    } else if (data.status === 'auth_required') {
+      alert('Your TR session expired. Run Update Now first to re-authenticate, then try Documents again.');
+    } else {
+      alert('Download failed: ' + (data.detail || data.status || 'unknown error'));
+    }
+  } catch (e) {
+    alert('Download error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  }
 }
 
 async function updateData() {

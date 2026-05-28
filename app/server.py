@@ -210,6 +210,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._handle_setup()
         if self.path == "/reset":
             return self._handle_reset()
+        if self.path == "/download_docs":
+            return self._handle_download_docs()
         if self.path != "/update":
             self.send_response(404)
             self.end_headers()
@@ -439,6 +441,92 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         self._json(200, {"status": "ok", "removed": removed})
+
+    # --------------------------------------------------------- download_docs
+    def _handle_download_docs(self):
+        """Download every PDF Trade Republic has issued for this account.
+
+        Body is optional JSON:
+          {"since": "YYYY-MM-DD", "kinds": "trades,dividends,..."}
+
+        Files land in DATA/documents/<YYYY>/<kind>/<file>.pdf. Idempotent —
+        re-running only fetches what's missing.
+
+        Exit codes inherited from tr-api CLI (see tr-api/docs/cli-contract.md).
+        """
+        length = int(self.headers.get("Content-Length") or 0)
+        body = {}
+        if length:
+            try:
+                body = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            except json.JSONDecodeError:
+                self._json(400, {"status": "bad_request", "detail": "invalid JSON"})
+                return
+
+        out_dir = DATA_DIR / "documents"
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        # Build tr-api CLI command. We always pass --json so we can parse the
+        # exit envelope below.
+        cmd = [
+            sys.executable, "-m", "tr_api.cli", "--json",
+            "docs", "download",
+            "--out", str(out_dir),
+        ]
+        since = body.get("since")
+        if since:
+            cmd += ["--since", str(since)]
+        kinds = body.get("kinds")
+        if kinds:
+            cmd += ["--kinds", str(kinds)]
+
+        try:
+            # 30 min ceiling — full history with thousands of PDFs is plausible.
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=1800)
+        except subprocess.TimeoutExpired:
+            self._json(504, {"status": "timeout", "detail": "docs download > 30 min"})
+            return
+        except Exception as e:
+            self._json(500, {"status": "error", "detail": str(e)})
+            return
+
+        # Parse the JSON envelope tr-api always emits with --json.
+        try:
+            envelope = json.loads(result.stdout or "{}")
+        except json.JSONDecodeError:
+            envelope = {"ok": False, "error": "ParseError", "message": result.stderr[-500:]}
+
+        print(
+            f"[docs] exit={result.returncode} ok={envelope.get('ok')} "
+            f"counts={envelope.get('data', {}).get('counts')}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+        if envelope.get("ok"):
+            data = envelope.get("data") or {}
+            self._json(200, {
+                "status": "ok",
+                "out_dir": data.get("out_dir"),
+                "counts": data.get("counts", {}),
+                "manifest": data.get("manifest"),
+            })
+            return
+
+        # Map known tr-api exit codes to HTTP statuses
+        exit_code = envelope.get("exit_code", result.returncode)
+        if exit_code in (20, 30):  # MISSING_COOKIES / SESSION_EXPIRED
+            self._json(401, {"status": "auth_required",
+                             "detail": envelope.get("message", "")})
+        elif exit_code == 41:
+            self._json(429, {"status": "rate_limited",
+                             "detail": envelope.get("message", "")})
+        else:
+            self._json(500, {
+                "status": "error",
+                "exit_code": exit_code,
+                "detail": envelope.get("message", "")[:500],
+            })
 
     # ---- helpers -------------------------------------------------------
     def _json(self, code, payload):

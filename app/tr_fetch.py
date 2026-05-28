@@ -99,37 +99,93 @@ except ImportError as e:  # pragma: no cover
 # --------------------------------------------------------------------------
 # Event-type mapping (TR's eventType → dashboard CSV 'Type' column)
 # --------------------------------------------------------------------------
-# Keep these strings in sync with what analyze_analytics.py looks for:
-#   Deposit, Removal, Tax Refund, Buy, Sell, Dividend, Interest
-# Verified against live TR responses (May 2026). CARD_TRANSACTION is what
-# TR emits for card spending now; older docs use card_successful_transaction.
-# We keep both for safety. Trades are classified after lookup via _classify_trade.
+# Targets analyze_analytics.py vocabulary: Deposit / Removal / Tax Refund /
+# Buy / Sell / Dividend / Interest.
+#
+# IMPORTANT: TR renamed almost every eventType during 2026. Old names
+# (INCOMING_TRANSFER, TRADE_INVOICE, DIVIDEND, ...) no longer appear on
+# live responses — observed via a fresh fetch_all on 2026-05-28:
+#
+#   timelineTransactions (6000 items)         timelineActivityLog (858)
+#   ----------------------------------         -----------------------
+#   TRADING_SAVINGSPLAN_EXECUTED   4181        ORDER_CANCELED         202
+#   SSP_CORPORATE_ACTION_CASH       694        SSP_CORPORATE_ACTION_*
+#   TRADING_TRADE_EXECUTED          465        TRADING_ORDER_*
+#   CARD_TRANSACTION                321        ORDER_EXPIRED, ...
+#   BANK_TRANSACTION_*              ~178       (mostly order lifecycle
+#   SPARE_CHANGE_AGGREGATE           35         and corp-action info —
+#   SAVEBACK_AGGREGATE                8         no actual cash events,
+#   SSP_TAX_CORRECTION               34         so unmapped here)
+#   INTEREST_PAYOUT                   8
+#   CARD_REFUND                       2
+#
+# Old names kept under #legacy for accounts whose historical CSV rows
+# came from pytr (so re-running over an existing pytr-era CSV doesn't
+# silently downgrade them).
 EVENT_TYPE_MAP: dict[str, str] = {
-    # Cash in
-    "INCOMING_TRANSFER":            "Deposit",
-    "INCOMING_TRANSFER_DELEGATION": "Deposit",
-    "PAYMENT_INBOUND":              "Deposit",
-    "PAYMENT_INBOUND_SEPA_DIRECT_DEBIT": "Deposit",
-    "card_refund":                  "Deposit",
-    "CARD_REFUND":                  "Deposit",
-    # Cash out / card spending
-    "CARD_TRANSACTION":             "Removal",
-    "card_successful_transaction":  "Removal",
-    "OUTGOING_TRANSFER":            "Removal",
-    "OUTGOING_TRANSFER_DELEGATION": "Removal",
-    "PAYMENT_OUTBOUND":             "Removal",
-    # Tax flows
-    "ssp_tax_correction_invoice":   "Tax Refund",
-    "TAX_REFUND":                   "Tax Refund",
-    # Trading (Buy vs Sell decided by _classify_trade — looks at amount sign)
-    "TRADE_INVOICE":                "Trade",
-    "ORDER_EXECUTED":               "Trade",
-    # Income
-    "CREDIT":                       "Dividend",
-    "DIVIDEND":                     "Dividend",
-    "ssp_corporate_action_invoice_cash": "Dividend",
-    "INTEREST_PAYOUT":              "Interest",
-    "INTEREST_PAYOUT_CREATED":      "Interest",
+    # --- Cash in -----------------------------------------------------------
+    "BANK_TRANSACTION_INCOMING":           "Deposit",
+    "CARD_REFUND":                         "Deposit",
+    # legacy
+    "INCOMING_TRANSFER":                   "Deposit",
+    "INCOMING_TRANSFER_DELEGATION":        "Deposit",
+    "PAYMENT_INBOUND":                     "Deposit",
+    "PAYMENT_INBOUND_SEPA_DIRECT_DEBIT":   "Deposit",
+    "card_refund":                         "Deposit",
+
+    # --- Cash out / card spending -----------------------------------------
+    "CARD_TRANSACTION":                    "Removal",
+    "BANK_TRANSACTION_OUTGOING":           "Removal",
+    "BANK_TRANSACTION_OUTGOING_DIRECT_DEBIT": "Removal",
+    "BANK_TRANSACTION_OUTGOING_SCHEDULED": "Removal",
+    "CRYPTO_TRANSFER_NETWORK_FEE":         "Removal",
+    # legacy
+    "card_successful_transaction":         "Removal",
+    "OUTGOING_TRANSFER":                   "Removal",
+    "OUTGOING_TRANSFER_DELEGATION":        "Removal",
+    "PAYMENT_OUTBOUND":                    "Removal",
+
+    # --- Tax flows --------------------------------------------------------
+    "SSP_TAX_CORRECTION":                  "Tax Refund",
+    # legacy
+    "ssp_tax_correction_invoice":          "Tax Refund",
+    "TAX_REFUND":                          "Tax Refund",
+
+    # --- Trading ----------------------------------------------------------
+    # SAVINGSPLAN / SPARE_CHANGE / SAVEBACK are ALWAYS buys (the user can't
+    # sell via these flows), so map straight to Buy — skipping the
+    # amount-sign classification (which would also work but is unnecessary).
+    "TRADING_SAVINGSPLAN_EXECUTED":        "Buy",
+    "SPARE_CHANGE_AGGREGATE":              "Buy",
+    "SAVEBACK_AGGREGATE":                  "Buy",
+    # Manual trades / private market — classify_trade decides Buy vs Sell
+    # by amount sign.
+    "TRADING_TRADE_EXECUTED":              "Trade",
+    "PRIVATE_MARKET_FUND_TRADE_EXECUTED":  "Trade",
+    # legacy
+    "TRADE_INVOICE":                       "Trade",
+    "ORDER_EXECUTED":                      "Trade",
+
+    # --- Income (dividends, interest) -------------------------------------
+    "SSP_CORPORATE_ACTION_CASH":           "Dividend",
+    "INTEREST_PAYOUT":                     "Interest",
+    "INTEREST_PAYOUT_CREATED":             "Interest",
+    # legacy
+    "CREDIT":                              "Dividend",
+    "DIVIDEND":                            "Dividend",
+    "ssp_corporate_action_invoice_cash":   "Dividend",
+
+    # --- Intentionally NOT mapped -----------------------------------------
+    # CARD_VERIFICATION (€1 pre-auth, refunded) — noise.
+    # TRADING_SAVINGSPLAN_EXECUTION_FAILED — informative, not a cash event.
+    # SSP_CORPORATE_ACTION_CASH_NON_DIVIDEND — spinoff cash with no
+    #   matching position credit; revisit if a user wants it surfaced.
+    # All timelineActivityLog event types (ORDER_CANCELED,
+    #   SSP_CORPORATE_ACTION_ACTIVITY/INFORMATIVE/INSTRUCTION/UPCOMING,
+    #   CSX_CHAT_ACTIVITY, ORDER_EXPIRED, DOCUMENTS_ACCEPTED, ...) — these
+    #   are order lifecycle / informational, NOT financial events. We keep
+    #   fetching the topic in case a future TR change moves cash events
+    #   onto it, but for now drop everything we see.
 }
 
 

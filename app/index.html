@@ -174,6 +174,118 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .concentration ul { margin: 6px 0 0 20px; padding: 0; color: var(--muted); }
 .concentration li { margin: 2px 0; }
 
+/* ============ NEW DESIGN (mockup v5): top-bar + sticky cockpit + non-blocking sync ============ */
+
+/* Top bar — logo + tabs + actions. Replaces the old h1 + .nav layout. */
+.top-bar {
+  display: flex; align-items: center; gap: 16px; justify-content: space-between;
+  padding: 14px 0 10px;
+  margin: -24px -24px 0;  /* let it reach the page edges; body has padding:24px */
+  padding-left: 24px; padding-right: 24px;
+}
+.top-bar .brand { display: flex; align-items: center; gap: 10px; }
+.top-bar h1 { font-size: 18px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; }
+.top-bar .logo-box { background: #fff; width: 28px; height: 28px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.top-bar nav { display: flex; gap: 4px; flex: 1; justify-content: center; }
+.top-bar nav a { color: var(--muted); text-decoration: none; font-size: 13px;
+  padding: 8px 16px; border-radius: 8px; font-weight: 500;
+  border: 1px solid transparent; cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s; }
+.top-bar nav a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.top-bar nav a.active { color: var(--blue); background: rgba(96,165,250,0.08); border-color: var(--blue); }
+.top-bar .actions { display: flex; gap: 8px; align-items: center; }
+.top-bar .actions button {
+  background: var(--blue); color: var(--bg); border: none;
+  padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.top-bar .actions button.ghost {
+  background: transparent; color: var(--muted); border: 1px solid var(--border);
+}
+.top-bar .actions button.ghost:hover { color: var(--text); border-color: var(--muted); }
+.top-bar .actions button[disabled] { opacity: 0.7; cursor: progress; }
+
+/* Sticky cockpit — 4 KPIs + 5 buckets, visible on every page */
+.cockpit {
+  position: sticky; top: 0; z-index: 50;
+  background: rgba(15, 20, 25, 0.95); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px 12px;
+  margin: 0 -24px 24px;  /* reach to page edges */
+}
+.cockpit-row { display: grid; gap: 18px; align-items: center; }
+.cockpit-row.kpis    { grid-template-columns: 2fr 1fr 1fr 1fr; margin-bottom: 10px; }
+.cockpit-row.buckets { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.cockpit .ck-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+.cockpit .ck-value { font-size: 26px; font-weight: 800; margin-top: 2px; }
+.cockpit .ck-sub   { color: var(--muted); font-size: 12px; margin-top: 1px; }
+.cockpit .ck-value.big { font-size: 32px; }
+.cockpit .b-pill {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: flex; flex-direction: column;
+}
+.cockpit .b-pill .b-label { font-size: 10px; color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px; }
+.cockpit .b-pill .b-value { font-size: 16px; font-weight: 700; margin-top: 2px; }
+.cockpit .b-pill .b-sub   { font-size: 10px; color: var(--muted); margin-top: 1px; }
+@media (max-width: 1000px) {
+  .cockpit-row.kpis    { grid-template-columns: 1fr 1fr; }
+  .cockpit-row.buckets { grid-template-columns: repeat(2, 1fr); }
+  .top-bar nav { flex: none; }
+}
+
+/* Spinner used inside in-flight buttons */
+.spin {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 50%; animation: spin-anim 0.7s linear infinite;
+  vertical-align: -1px;
+}
+@keyframes spin-anim { to { transform: rotate(360deg); } }
+
+/* Thin progress bar pinned to the very top — non-blocking */
+.progress-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  z-index: 100; pointer-events: none;
+  display: none;
+}
+.progress-bar.active { display: block; }
+.progress-bar.indet {
+  background: linear-gradient(90deg, transparent 0%, var(--blue) 50%, transparent 100%);
+  background-size: 50% 100%; background-repeat: no-repeat;
+  animation: pb-slide 1.6s ease-in-out infinite;
+}
+@keyframes pb-slide {
+  0%   { background-position: -50% 0; }
+  100% { background-position: 150% 0; }
+}
+
+/* Status banner — top-center under the cockpit, non-blocking */
+.toast {
+  position: fixed; top: 200px; left: 50%; transform: translateX(-50%) translateY(-10px);
+  background: var(--card); border: 1px solid var(--border);
+  border-top: 3px solid var(--blue);
+  padding: 12px 20px; border-radius: 0 0 10px 10px;
+  min-width: 320px; max-width: 520px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+  display: none; z-index: 90;
+  font-size: 14px; text-align: center;
+  opacity: 0; transition: opacity 0.18s, transform 0.18s;
+}
+.toast.active { display: block; opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast .t-title { font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+.toast .t-stage { color: var(--muted); font-size: 12px; }
+.toast.ok    { border-top-color: var(--green); }
+.toast.err   { border-top-color: var(--red);   }
+.toast .t-close { background: none; border: none; color: var(--muted); cursor: pointer; position: absolute; top: 6px; right: 10px; font-size: 16px; padding: 0; }
+@media (max-width: 700px) {
+  .toast { min-width: 80vw; max-width: 95vw; top: 230px; }
+}
+
 .section { margin: 40px 0 16px; font-size: 18px; font-weight: 700;
   display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; width: 100%; }
 .section:hover { opacity: 0.8; }
@@ -276,31 +388,65 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </head>
 <body>
 
-<h1>
-  <div class="logo-box">📊</div>
-  Trade Republic Portfolio
-</h1>
-
-<div class="nav" style="justify-content: space-between; align-items: center;">
-  <div style="display: flex; gap: 12px;">
+<!-- New top-bar: brand + 4 tabs + actions. Replaces the old h1 + .nav. -->
+<div class="top-bar">
+  <div class="brand">
+    <div class="logo-box">📊</div>
+    <h1>Trade Republic</h1>
+  </div>
+  <nav>
     <a href="index.html" class="active">Portfolio</a>
     <a href="analytics.html">Analytics</a>
-  </div>
-  <div style="display:flex; gap:10px; align-items:center;">
-    <button id="update-btn" class="update-btn" onclick="updateData()">
-      <span class="spinner"></span><span class="icon">🔄</span><span class="label">Update Now</span>
-    </button>
-    <button id="docs-btn" class="update-btn"
-            style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
-            onclick="downloadDocs()"
-            title="Download every PDF TR has issued (trades, dividends, statements, tax). Files go to DATA/documents/<year>/<kind>/.">
+    <a href="settings.html">⚙ Settings</a>
+    <a href="glossary.html">📖 Glossary</a>
+  </nav>
+  <div class="actions">
+    <button id="docs-btn" class="ghost" onclick="downloadDocs()"
+            title="Download every PDF TR has issued (trades, dividends, statements, tax).">
       📄 Documents
     </button>
-    <button class="update-btn" style="background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:500;"
-            onclick="openSetupModal()" title="Change phone / PIN, or switch to a different account">
-      ⚙️ Account
+    <button id="update-btn" onclick="updateData()">
+      🔄 Update Now
     </button>
-    <span id="update-status" class="update-status" style="display:none"></span>
+  </div>
+</div>
+
+<!-- Thin non-blocking progress bar pinned at top -->
+<div id="progress-bar" class="progress-bar"></div>
+
+<!-- Status banner — top-center, non-blocking. Replaces old progress overlay. -->
+<div id="toast" class="toast">
+  <button class="t-close" onclick="hideToast()" aria-label="Close">×</button>
+  <div class="t-title"><span class="spin"></span> <span id="toast-title">Updating information…</span></div>
+  <div class="t-stage" id="toast-stage">Connecting…</div>
+</div>
+
+<!-- Sticky cockpit — 4 KPIs + 5 wealth buckets (data populated by JS on load) -->
+<div class="cockpit">
+  <div class="cockpit-row kpis">
+    <div>
+      <div class="ck-label">Total Net Wealth</div>
+      <div class="ck-value big" id="ck-total">€0.00</div>
+      <div class="ck-sub" id="ck-total-sub">—</div>
+    </div>
+    <div>
+      <div class="ck-label">Investment Cost</div>
+      <div class="ck-value" id="ck-cost">€0.00</div>
+      <div class="ck-sub">Sum of all buys</div>
+    </div>
+    <div>
+      <div class="ck-label">Total P/L</div>
+      <div class="ck-value" id="ck-pl">€0.00</div>
+      <div class="ck-sub" id="ck-pl-pct">0.00%</div>
+    </div>
+    <div>
+      <div class="ck-label">Available Cash</div>
+      <div class="ck-value asset-cash" id="ck-cash">€0.00</div>
+      <div class="ck-sub">To be reinvested</div>
+    </div>
+  </div>
+  <div class="cockpit-row buckets" id="ck-buckets">
+    <!-- bucket pills populated by renderCockpit() -->
   </div>
 </div>
 
@@ -431,22 +577,16 @@ tr:hover { background: rgba(255,255,255,0.02); }
      the dashboard is downloading from TR. The stage message rotates
      according to elapsed time so the user knows things are still alive
      even when no log is streaming. -->
-<div class="progress-overlay" id="progress-overlay">
-  <div class="progress-box">
-    <div class="progress-spinner"></div>
-    <h2 id="progress-title">Actualizando tu portafolio</h2>
-    <div class="progress-stage" id="progress-stage">Conectando con Trade Republic…</div>
-    <div class="progress-hint">
-      Esto suele tardar entre 30 segundos y 2 minutos.<br>
-      Por favor, no cierres esta pestaña.
-    </div>
-    <div class="progress-elapsed" id="progress-elapsed">0s</div>
-  </div>
-</div>
+<!-- Old full-screen progress overlay was replaced by the top-center toast +
+     thin progress bar (defined at the top of the page). The functions
+     showProgressOverlay()/hideProgressOverlay() now drive those instead,
+     so existing call sites in updateData() etc. keep working. -->
 
 <div class="warning" id="warning" style="display:none"></div>
 
-<div class="cards" id="cards"></div>
+<!-- KPI cards (.cards) were moved into the sticky cockpit above.
+     Wealth-by-Bucket strip (id=wealth-buckets-section) is also in the cockpit
+     now — the standalone section below is hidden by default. -->
 
 <div id="concentration" class="concentration" style="display:none"></div>
 
@@ -843,29 +983,57 @@ const PROGRESS_STAGES_FULL = [
 let _progressStartedAt = null;
 let _progressTimer = null;
 
+// New design (mockup v5): the old full-screen progress overlay with the dim
+// backdrop is replaced with a top-center toast + a 2px progress bar pinned
+// at the very top of the page. Nothing blocks the UI; the user can scroll
+// and switch tabs while the fetch runs.
+//
+// Function names are kept (showProgressOverlay/hideProgressOverlay) so all
+// existing call sites in updateData()/submitMfa()/etc continue to work.
+function showToast(stage, kind) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.classList.remove('ok', 'err');
+  if (kind) t.classList.add(kind);
+  const stageEl = document.getElementById('toast-stage');
+  if (stageEl) stageEl.textContent = stage;
+  t.classList.add('active');
+}
+function setToastTitle(title) {
+  const el = document.getElementById('toast-title');
+  if (el) el.textContent = title;
+}
+function hideToast() {
+  const t = document.getElementById('toast');
+  if (t) t.classList.remove('active');
+}
+function showProgressBar() {
+  const b = document.getElementById('progress-bar');
+  if (b) b.classList.add('active', 'indet');
+}
+function hideProgressBar() {
+  const b = document.getElementById('progress-bar');
+  if (b) b.classList.remove('active', 'indet');
+}
+
 function showProgressOverlay(opts) {
   const stages = (opts && opts.full) ? PROGRESS_STAGES_FULL : PROGRESS_STAGES_NORMAL;
-  document.getElementById('progress-overlay').classList.add('show');
-  document.getElementById('progress-title').textContent =
-    (opts && opts.full) ? 'Recargando todo desde cero' : 'Actualizando tu portafolio';
-  document.getElementById('progress-stage').textContent = stages[0].text;
-  document.getElementById('progress-elapsed').textContent = '0s';
+  setToastTitle((opts && opts.full) ? 'Updating all information…' : 'Updating information…');
+  showToast(stages[0].text);
+  showProgressBar();
   _progressStartedAt = Date.now();
   _progressTimer = setInterval(() => {
     const elapsed = (Date.now() - _progressStartedAt) / 1000;
     const stage = stages.find(s => elapsed < s.until) || stages[stages.length - 1];
-    const stageEl = document.getElementById('progress-stage');
-    if (stageEl.textContent !== stage.text) stageEl.textContent = stage.text;
-    document.getElementById('progress-elapsed').textContent =
-      elapsed < 60 ? `${Math.floor(elapsed)}s`
-                   : `${Math.floor(elapsed / 60)}m ${Math.floor(elapsed) % 60}s`;
+    showToast(stage.text);
   }, 500);
 }
 
 function hideProgressOverlay() {
-  document.getElementById('progress-overlay').classList.remove('show');
   if (_progressTimer) { clearInterval(_progressTimer); _progressTimer = null; }
   _progressStartedAt = null;
+  hideProgressBar();
+  hideToast();
 }
 
 async function downloadDocs() {
@@ -1074,29 +1242,11 @@ async function load() {
   state.data = await res.json();
   document.getElementById('ts').textContent = 'Last update: ' + new Date().toLocaleString();
 
-  // Cards
+  // Populate the sticky cockpit (KPIs + bucket pills). Replaces the old
+  // .cards section that used to live below the nav.
   const s = state.data.summary;
-  document.getElementById('cards').innerHTML = `
-    <div class="card"><div class="label">Total Net Value</div>
-      <div class="value blue">${fmtEUR(s.total_netvalue)}</div>
-      <div class="delta">Depot ${fmtEUR(s.depot_netvalue)} + Cash ${fmtEUR(s.cash_eur)}</div></div>
-    <div class="card"><div class="label">Total Investment Cost</div>
-      <div class="value">${fmtEUR(s.depot_buycost)}</div>
-      <div class="delta">Sum of all buys</div></div>
-    <div class="card"><div class="label">Total P/L</div>
-      <div class="value">${fmtEUR(s.depot_pl_eur)}</div>
-      <div class="delta">${fmtPct(s.depot_pl_pct)}</div></div>
-    <div class="card"><div class="label">Active Positions</div>
-      <div class="value">${state.data.positions_with_value}</div>
-      <div class="delta">+ ${state.data.zero_value_positions.length} with no price</div></div>
-    <div class="card"><div class="label">Available Cash</div>
-      <div class="value asset-cash">${fmtEUR(s.cash_eur)}</div>
-      <div class="delta">To be reinvested</div></div>
-  `;
-
-  // Wealth breakdown by TR bucket — mirrors what the official app shows
-  // as separate tiles (Brokerage / Bonds / Private Equity / etc.).
-  renderWealthBuckets(s);
+  renderCockpit(s, state.data);
+  renderWealthBuckets(s);  // populates #ck-buckets inside the cockpit now
 
   // Concentration warnings (purely informational; thresholds are heuristic).
   renderConcentrationWarnings(state.data);
@@ -1300,14 +1450,25 @@ function renderConcentrationWarnings(data) {
   container.style.display = '';
 }
 
+function renderCockpit(summary, data) {
+  // 4 KPIs at the top of the sticky cockpit.
+  document.getElementById('ck-total').textContent = fmtEUR(summary.total_netvalue);
+  document.getElementById('ck-total-sub').textContent =
+    'Depot ' + fmtEUR(summary.depot_netvalue) +
+    ' + Cash ' + fmtEUR(summary.cash_eur) +
+    ' · ' + data.positions_with_value + ' positions';
+  document.getElementById('ck-cost').textContent = fmtEUR(summary.depot_buycost);
+  document.getElementById('ck-pl').textContent = fmtEUR(summary.depot_pl_eur);
+  document.getElementById('ck-pl-pct').textContent = fmtPct(summary.depot_pl_pct);
+  document.getElementById('ck-cash').textContent = fmtEUR(summary.cash_eur);
+}
+
 function renderWealthBuckets(summary) {
-  // Render one tile per TR bucket (stocksAndETFs / cryptos / bonds /
-  // privateMarkets / others) + a Cash tile. Matches what TR's mobile
-  // "Wealth" screen displays as separate cards.
+  // Bucket pills inside the cockpit. Each asset class has its own
+  // consistent color (see :root CSS vars).
   const by = summary.by_category || {};
-  const container = document.getElementById('wealth-buckets');
-  const section = document.getElementById('wealth-buckets-section');
-  if (!container || !section) return;
+  const container = document.getElementById('ck-buckets');
+  if (!container) return;
 
   // Each asset class gets its own consistent color across the app.
   // See the :root CSS variables for the palette definition.
@@ -1320,40 +1481,28 @@ function renderWealthBuckets(summary) {
   };
   const order = ['stocksAndETFs','bonds','privateMarkets','cryptos','others'];
 
-  const tiles = [];
+  const pills = [];
   for (const key of order) {
     const b = by[key];
     if (!b || !b.count) continue;
     const meta = labels[key] || { name: key, icon: '·', color: '' };
-    // P/L: sign only (no color) — user preference 2026-05-28.
-    // The +/− in fmtPct() already conveys direction.
-    tiles.push(`
-      <div class="card">
-        <div class="label">${meta.icon} ${meta.name}</div>
-        <div class="value ${meta.color}">${fmtEUR(b.net_value_eur)}</div>
-        <div class="delta">
-          ${b.count} position${b.count === 1 ? '' : 's'} · cost ${fmtEUR(b.buy_cost_eur)}
-          <span style="margin-left:6px">${fmtPct(b.pl_pct)}</span>
-        </div>
+    pills.push(`
+      <div class="b-pill">
+        <div class="b-label">${meta.icon} ${meta.name}</div>
+        <div class="b-value ${meta.color}">${fmtEUR(b.net_value_eur)}</div>
+        <div class="b-sub">${b.count} pos · ${fmtPct(b.pl_pct)}</div>
       </div>
     `);
   }
-  // Always show a Cash tile so the total adds up visibly to summary.total_netvalue.
-  tiles.push(`
-    <div class="card">
-      <div class="label">💶 Cash</div>
-      <div class="value asset-cash">${fmtEUR(summary.cash_eur)}</div>
-      <div class="delta">Available to invest / withdraw</div>
+  // Always show a Cash pill so the cockpit sums to total_netvalue visibly.
+  pills.push(`
+    <div class="b-pill">
+      <div class="b-label">💶 Cash</div>
+      <div class="b-value asset-cash">${fmtEUR(summary.cash_eur)}</div>
+      <div class="b-sub">to invest / withdraw</div>
     </div>
   `);
-
-  container.innerHTML = `<div class="cards">${tiles.join('')}</div>
-    <p style="color:var(--muted); font-size:0.85em; margin-top:6px;">
-      Sum of all tiles above = <strong>${fmtEUR(summary.total_netvalue)}</strong>
-      (matches the Total Net Value card).
-    </p>`;
-  section.style.display = '';
-  container.style.display = '';
+  container.innerHTML = pills.join('');
 }
 
 function renderWinners() {

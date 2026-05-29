@@ -104,6 +104,29 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .pos { color: var(--green); }
 .neg { color: var(--red); }
 
+/* External-research links next to ISIN (TR, Yahoo Finance, Stock Analysis).
+   Compact pill style; muted until hover. */
+.ext-links { display: inline-flex; gap: 4px; margin-left: 8px; }
+.ext-links a { font-size: 10px; font-weight: 600; letter-spacing: 0.3px;
+  color: var(--muted); padding: 1px 5px; border: 1px solid var(--border);
+  border-radius: 4px; text-decoration: none; opacity: 0.6;
+  transition: opacity 0.15s, color 0.15s, border-color 0.15s; }
+.ext-links a:hover { opacity: 1; color: var(--text); border-color: var(--muted); }
+
+/* Concentration warning banner — between the KPI cards and Wealth-by-Bucket. */
+.concentration {
+  margin: 12px 0 24px;
+  padding: 12px 16px;
+  background: rgba(251, 191, 36, 0.06);
+  border-left: 3px solid var(--amber);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text);
+}
+.concentration .ttl { font-weight: 600; color: var(--amber); margin-right: 8px; }
+.concentration ul { margin: 6px 0 0 20px; padding: 0; color: var(--muted); }
+.concentration li { margin: 2px 0; }
+
 .section { margin: 40px 0 16px; font-size: 18px; font-weight: 700;
   display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; width: 100%; }
 .section:hover { opacity: 0.8; }
@@ -377,6 +400,8 @@ tr:hover { background: rgba(255,255,255,0.02); }
 <div class="warning" id="warning" style="display:none"></div>
 
 <div class="cards" id="cards"></div>
+
+<div id="concentration" class="concentration" style="display:none"></div>
 
 <div class="section" id="wealth-buckets-section" style="display:none" onclick="toggleSection('wealth-buckets')">
   <span class="toggle-icon">▼</span> 💼 Wealth by Bucket
@@ -999,6 +1024,9 @@ async function load() {
   // as separate tiles (Brokerage / Bonds / Private Equity / etc.).
   renderWealthBuckets(s);
 
+  // Concentration warnings (purely informational; thresholds are heuristic).
+  renderConcentrationWarnings(state.data);
+
   if (state.data.zero_value_positions.length > 0) {
     const w = document.getElementById('warning');
     w.style.display = 'block';
@@ -1013,30 +1041,46 @@ async function load() {
   renderAll();
 }
 
+// Build external-research links for an ISIN. TR's own instrument page
+// is the best primary (no auth needed, mobile-friendly), Yahoo Finance
+// lookup is the fallback for fundamentals + news. Both open in a new
+// tab. No API calls; pure permalinks.
+function externalLinks(isin) {
+  if (!isin) return '';
+  const tr = `https://app.traderepublic.com/instrument/${encodeURIComponent(isin)}`;
+  const yahoo = `https://finance.yahoo.com/lookup/?s=${encodeURIComponent(isin)}`;
+  const sa = `https://stockanalysis.com/quote/iso/${encodeURIComponent(isin)}`;
+  return `<span class="ext-links">
+    <a href="${tr}" target="_blank" rel="noopener" title="Open on Trade Republic">TR</a>
+    <a href="${yahoo}" target="_blank" rel="noopener" title="Look up on Yahoo Finance">Y!</a>
+    <a href="${sa}" target="_blank" rel="noopener" title="Look up on Stock Analysis">SA</a>
+  </span>`;
+}
+
 function rowHTML(p) {
-  const plClass = p.pl_pct >= 0 ? 'pos' : 'neg';
+  // No green/red — sign-only convention. The +/− in fmtPct() / fmtEUR()
+  // already conveys direction.
   return `<tr>
     <td title="${p.name}">${p.name}</td>
-    <td><code style="font-size:11px;color:var(--muted)">${p.isin}</code></td>
+    <td><code style="font-size:11px;color:var(--muted)">${p.isin}</code>${externalLinks(p.isin)}</td>
     <td class="num">${fmt(p.quantity, 4)}</td>
     <td class="num">${fmtEUR(p.avg_cost)}</td>
     <td class="num">${fmtEUR(p.current_price)}</td>
     <td class="num">${fmtEUR(p.buy_cost_eur)}</td>
     <td class="num"><strong>${fmtEUR(p.net_value_eur)}</strong></td>
-    <td class="num ${plClass}">${fmtEUR(p.pl_eur)}</td>
-    <td class="num ${plClass}"><strong>${fmtPct(p.pl_pct)}</strong></td>
+    <td class="num">${fmtEUR(p.pl_eur)}</td>
+    <td class="num"><strong>${fmtPct(p.pl_pct)}</strong></td>
   </tr>`;
 }
 
 function shortRow(p) {
-  const plClass = p.pl_pct >= 0 ? 'pos' : 'neg';
   return `<tr>
     <td title="${p.name}">${p.name}</td>
-    <td><code style="font-size:11px;color:var(--muted)">${p.isin}</code></td>
+    <td><code style="font-size:11px;color:var(--muted)">${p.isin}</code>${externalLinks(p.isin)}</td>
     <td class="num">${fmt(p.quantity, 4)}</td>
     <td class="num"><strong>${fmtEUR(p.net_value_eur)}</strong></td>
-    <td class="num ${plClass}">${fmtEUR(p.pl_eur)}</td>
-    <td class="num ${plClass}"><strong>${fmtPct(p.pl_pct)}</strong></td>
+    <td class="num">${fmtEUR(p.pl_eur)}</td>
+    <td class="num"><strong>${fmtPct(p.pl_pct)}</strong></td>
   </tr>`;
 }
 
@@ -1046,6 +1090,66 @@ function sortArray(arr, cfg) {
     if (typeof av === 'number') return (av - bv) * cfg.sortDir;
     return String(av).localeCompare(String(bv)) * cfg.sortDir;
   });
+}
+
+function renderConcentrationWarnings(data) {
+  // Surface "you might be a bit too concentrated in X" warnings based on
+  // the visible portfolio. Pure heuristic — no external data needed.
+  // Thresholds chosen so a well-diversified portfolio shows nothing.
+  const container = document.getElementById('concentration');
+  if (!container || !data) return;
+
+  const positions = (data.all_positions || []).filter(p => p.net_value_eur > 0);
+  if (positions.length === 0) { container.style.display = 'none'; return; }
+  const summary = data.summary || {};
+  const depot = summary.depot_netvalue || 1;
+  const warnings = [];
+
+  // 1. Top single position > 20% of depot
+  const top = [...positions].sort((a, b) => b.net_value_eur - a.net_value_eur)[0];
+  if (top && top.net_value_eur / depot > 0.20) {
+    const pct = (top.net_value_eur / depot * 100).toFixed(1);
+    warnings.push(`<strong>${top.name}</strong> is <strong>${pct}%</strong> of your depot ` +
+                  `(${fmtEUR(top.net_value_eur)}). A single position above 20% means a bad week ` +
+                  `for it moves your whole portfolio noticeably.`);
+  }
+
+  // 2. Top 5 positions > 50% of depot (general concentration)
+  const top5 = [...positions].sort((a, b) => b.net_value_eur - a.net_value_eur).slice(0, 5);
+  const top5Value = top5.reduce((s, p) => s + p.net_value_eur, 0);
+  if (top5Value / depot > 0.50 && positions.length > 10) {
+    const pct = (top5Value / depot * 100).toFixed(0);
+    warnings.push(`Your top 5 positions are <strong>${pct}%</strong> of your depot ` +
+                  `(out of ${positions.length} total). Most of the risk concentrates in a few names.`);
+  }
+
+  // 3. Asset-class skew — if a SINGLE bucket > 90% of depot
+  const buckets = summary.by_category || {};
+  for (const [key, b] of Object.entries(buckets)) {
+    if (!b || !b.net_value_eur) continue;
+    const share = b.net_value_eur / depot;
+    if (share > 0.90 && Object.keys(buckets).length > 1 && key !== 'others') {
+      const pct = (share * 100).toFixed(0);
+      warnings.push(`<strong>${pct}%</strong> of your depot is in <strong>${key}</strong>. ` +
+                    `Cross-asset diversification (e.g. some bonds against equity) reduces drawdowns ` +
+                    `in market stress.`);
+    }
+  }
+
+  // 4. Long tail — too many tiny positions
+  const tiny = positions.filter(p => p.net_value_eur < 50).length;
+  if (tiny > 50) {
+    warnings.push(`<strong>${tiny}</strong> positions are worth less than €50 each. ` +
+                  `Consider consolidating: tax forms and reconciliation get heavy at this scale.`);
+  }
+
+  if (warnings.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  container.innerHTML = `<span class="ttl">⚠️ Concentration insights</span>` +
+                        `<ul>${warnings.map(w => `<li>${w}</li>`).join('')}</ul>`;
+  container.style.display = '';
 }
 
 function renderWealthBuckets(summary) {

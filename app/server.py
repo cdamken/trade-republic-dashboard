@@ -506,6 +506,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
 
         cfg = _read_app_config()
+        old_dir = _docs_out_dir()  # resolve BEFORE writing new config
+        migrated_files = 0
         if "documents_path" in body:
             new_path = (body.get("documents_path") or "").strip()
             if new_path:
@@ -528,9 +530,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json(500, {"status": "write_failed", "detail": str(e)})
             return
 
+        # If the documents path actually changed and the old location had
+        # files in it, migrate them so the user doesn't lose previous
+        # downloads. We move (not copy) to preserve disk space; users who
+        # had downloads in DATA/documents/ from before the configurable-
+        # path feature get them auto-migrated to ~/Documents/Trade_Republic_Docs/.
+        new_dir = _docs_out_dir()
+        try:
+            if old_dir.resolve() != new_dir.resolve() and old_dir.is_dir():
+                import shutil
+                new_dir.mkdir(parents=True, exist_ok=True)
+                for item in old_dir.iterdir():
+                    dest = new_dir / item.name
+                    if dest.exists():
+                        continue  # don't overwrite — user can dedupe manually
+                    shutil.move(str(item), str(dest))
+                    migrated_files += 1
+                # If we emptied the old dir, prune it (best-effort).
+                try:
+                    old_dir.rmdir()
+                except OSError:
+                    pass
+        except Exception as e:
+            print(f"[settings] migration failed: {e}", file=sys.stderr, flush=True)
+
         self._json(200, {
             "status": "ok",
             "documents_path": cfg.get("documents_path") or str(DEFAULT_DOCS_DIR),
+            "migrated_files": migrated_files,
+            "old_path": str(old_dir) if migrated_files else None,
         })
 
     # --------------------------------------------------------- download_docs

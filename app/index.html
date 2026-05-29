@@ -10,10 +10,23 @@
   --border: #2a3142;
   --text: #e8eef5;
   --muted: #7a8599;
-  --green: #4ade80;
-  --red: #f87171;
-  --amber: #fbbf24;
-  --blue: #60a5fa;
+
+  /* Semantic palette — colors carry meaning, don't pick them by aesthetics.
+   * Profit/loss are the only colors that SWAP based on data sign.
+   * Each asset class has its own consistent hue across the whole app.
+   */
+  --green: #4ade80;        /* profit / gain                                  */
+  --red:   #f87171;        /* loss                                           */
+  --blue:  #60a5fa;        /* primary KPI / equities (stocks & ETFs)         */
+  --amber: #fbbf24;        /* warnings only — NOT for cash/crypto anymore    */
+
+  /* Asset-class colors (use these for the Wealth-by-Bucket tiles + charts). */
+  --asset-equity:  #60a5fa;  /* blue       — stocks & ETFs (Brokerage)       */
+  --asset-bonds:   #d4a574;  /* warm gold  — fixed income (safe, stable)     */
+  --asset-pe:      #a78bfa;  /* purple     — private markets (illiquid)      */
+  --asset-crypto:  #fb923c;  /* orange     — crypto (Bitcoin-orange family)  */
+  --asset-cash:    #94a3b8;  /* slate gray — neutral, liquid, available      */
+  --asset-other:   #6b7280;  /* dim gray   — unknown / delisted              */
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
@@ -57,6 +70,13 @@ h1 { font-size: 28px; margin-bottom: 16px; display: flex; align-items: center; g
 .red { color: var(--red); }
 .amber { color: var(--amber); }
 .blue { color: var(--blue); }
+/* Semantic asset-class colors — paired with the CSS variables above. */
+.asset-equity { color: var(--asset-equity); }
+.asset-bonds  { color: var(--asset-bonds); }
+.asset-pe     { color: var(--asset-pe); }
+.asset-crypto { color: var(--asset-crypto); }
+.asset-cash   { color: var(--asset-cash); }
+.asset-other  { color: var(--asset-other); }
 
 .controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .controls input, .controls select { background: var(--card); border: 1px solid var(--border);
@@ -937,7 +957,7 @@ async function load() {
       <div class="value">${state.data.positions_with_value}</div>
       <div class="delta">+ ${state.data.zero_value_positions.length} with no price</div></div>
     <div class="card"><div class="label">Available Cash</div>
-      <div class="value amber">${fmtEUR(s.cash_eur)}</div>
+      <div class="value asset-cash">${fmtEUR(s.cash_eur)}</div>
       <div class="delta">To be reinvested</div></div>
   `;
 
@@ -1003,12 +1023,14 @@ function renderWealthBuckets(summary) {
   const section = document.getElementById('wealth-buckets-section');
   if (!container || !section) return;
 
+  // Each asset class gets its own consistent color across the app.
+  // See the :root CSS variables for the palette definition.
   const labels = {
-    stocksAndETFs:  { name: 'Brokerage (Stocks/ETFs)', icon: '📈', color: 'blue'  },
-    cryptos:        { name: 'Crypto',                  icon: '🪙', color: 'amber' },
-    bonds:          { name: 'Bonds',                   icon: '🏛',  color: ''      },
-    privateMarkets: { name: 'Private Equity',          icon: '🔒', color: ''      },
-    others:         { name: 'Others',                  icon: '·',  color: ''      },
+    stocksAndETFs:  { name: 'Brokerage (Stocks/ETFs)', icon: '📈', color: 'asset-equity' },
+    bonds:          { name: 'Bonds',                   icon: '🏛',  color: 'asset-bonds'  },
+    privateMarkets: { name: 'Private Equity',          icon: '🔒', color: 'asset-pe'     },
+    cryptos:        { name: 'Crypto',                  icon: '🪙', color: 'asset-crypto' },
+    others:         { name: 'Others',                  icon: '·',  color: 'asset-other'  },
   };
   const order = ['stocksAndETFs','bonds','privateMarkets','cryptos','others'];
 
@@ -1033,7 +1055,7 @@ function renderWealthBuckets(summary) {
   tiles.push(`
     <div class="card">
       <div class="label">💶 Cash</div>
-      <div class="value amber">${fmtEUR(summary.cash_eur)}</div>
+      <div class="value asset-cash">${fmtEUR(summary.cash_eur)}</div>
       <div class="delta">Available to invest / withdraw</div>
     </div>
   `);

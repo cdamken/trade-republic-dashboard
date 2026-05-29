@@ -156,11 +156,18 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
     <div class="substat">Current capital distribution</div>
     <div class="chart-container"><canvas id="allocationChart"></canvas></div>
   </div>
-  <!-- 2. Net Worth Evolution -->
+  <!-- 2. Capital Committed to TR -->
   <div class="card">
-    <h2>Net Worth Evolution</h2>
+    <h2>Capital Committed to Trade Republic</h2>
     <div class="stat" id="history-current">€0.00</div>
-    <div class="substat" id="history-substat">Total portfolio value (positions + cash) over time</div>
+    <div class="substat" id="history-substat">
+      Cumulative external cash flow (deposits + tax refunds + investment income − card spending − withdrawals).
+      <br>
+      <small style="color:var(--muted)">
+        This is NOT today's market value — that lives in the Total Net Value card on the Portfolio page.
+        This chart shows how much money has net-flowed INTO Trade Republic from outside, over time.
+      </small>
+    </div>
     <div class="range-buttons" id="history-range">
       <button data-range="1W">1W</button>
       <button data-range="1M">1M</button>
@@ -449,19 +456,26 @@ async function init() {
     document.getElementById('history-current').textContent =
       '€' + lastValue.toLocaleString(undefined, {minimumFractionDigits:2});
 
-    // Show delta vs the first point of the range
+    // Show delta vs the first point of the range, BUT skip the % when the
+    // first point is near zero (the very start of an account, e.g. €1.73
+    // gave a meaningless +451632% on a multi-thousand-euro account).
     if (hist.length > 1) {
       const delta = lastValue - firstValue;
-      const pct = (delta / firstValue) * 100;
       const sign = delta >= 0 ? '+' : '−';
       const color = delta >= 0 ? 'var(--green)' : 'var(--red)';
       const rangeLabel = range === 'ALL' ? 'all-time' : range;
+      const PCT_BASE_MIN = 100;  // EUR — under this the % is misleading
+      let pctText = '';
+      if (Math.abs(firstValue) >= PCT_BASE_MIN) {
+        const pct = (delta / firstValue) * 100;
+        pctText = ` (${sign}${Math.abs(pct).toFixed(1)}%)`;
+      }
       document.getElementById('history-substat').innerHTML =
-        `<span style="color:${color}">${sign}€${Math.abs(delta).toLocaleString(undefined,{maximumFractionDigits:0})} (${sign}${Math.abs(pct).toFixed(2)}%)</span>` +
-        ` over the last ${rangeLabel} · ${hist.length} daily snapshots`;
-    } else {
-      document.getElementById('history-substat').textContent =
-        'Total portfolio value (positions + cash) over time';
+        `<span style="color:${color}">${sign}€${Math.abs(delta).toLocaleString(undefined,{maximumFractionDigits:0})}${pctText}</span>` +
+        ` net inflow over ${rangeLabel} · ${hist.length} daily snapshots` +
+        `<br><small style="color:var(--muted)">` +
+        `Cumulative external cash flow (deposits + tax refunds + dividends + interest − card spending − withdrawals). ` +
+        `Today's market value is shown on the Portfolio page.</small>`;
     }
 
     // Tight Y range based on data in the visible window

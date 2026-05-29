@@ -19,6 +19,8 @@ import os
 import socketserver
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 PORT = 8085
@@ -552,22 +554,32 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 self._json(400, {"status": "bad_request", "detail": "invalid JSON"})
                 return
 
-        # Fast pre-check: is the TR session still alive? Without this we'd
-        # kick off the multi-minute walk and silently fail mid-way with a
-        # ConnectionClosedError. Better to bail out in 1s with a clean
-        # auth_required and let the UI offer Update Now.
+        # Fast pre-check: is the TR session still alive? If not, try the
+        # silent refresh first (pytr-style) — that revives most "expired"
+        # sessions without re-login. Only if the refresh itself fails do
+        # we ask the user to do a fresh MFA login.
         ping_cmd = [sys.executable, "-m", "tr_api.cli", "--json", "ping"]
         try:
             ping = subprocess.run(ping_cmd, capture_output=True, text=True, timeout=15)
             ping_env = json.loads(ping.stdout or "{}")
-            if not ping_env.get("ok") or not ping_env.get("data", {}).get("alive"):
-                self._json(401, {
-                    "status": "auth_required",
-                    "detail": "Your Trade Republic session expired. "
-                              "Click 'Update Now' first to re-authenticate, "
-                              "then try Documents again.",
-                })
-                return
+            alive = ping_env.get("ok") and ping_env.get("data", {}).get("alive")
+            if not alive:
+                # Try refresh — costs ~5-10s (Playwright + WAF + HTTP GET)
+                refresh_cmd = [sys.executable, "-m", "tr_api.cli", "--json", "auth", "refresh"]
+                refresh = subprocess.run(refresh_cmd, capture_output=True, text=True, timeout=30)
+                refresh_env = json.loads(refresh.stdout or "{}")
+                if refresh_env.get("ok") and refresh_env.get("data", {}).get("ok"):
+                    print("[docs] session refreshed silently via auth refresh",
+                          file=sys.stderr, flush=True)
+                else:
+                    self._json(401, {
+                        "status": "auth_required",
+                        "detail": "Your Trade Republic session expired and the "
+                                  "silent refresh failed. Click 'Update Now' "
+                                  "to do a full re-login (MFA push), then try "
+                                  "Documents again.",
+                    })
+                    return
         except Exception as e:
             # Don't block the user if ping itself blows up — fall through
             # and let the download attempt return whatever real error
@@ -662,7 +674,59 @@ class ThreadedServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
 
 
+# ---------------------------------------------------------------------------
+# Background session keepalive thread (pytr-style)
+# ---------------------------------------------------------------------------
+# Every ~290s we call `tr-api auth refresh` which GETs
+# /api/v1/auth/web/session — TR rotates JSESSIONID + tr_session and
+# saves them back to the cookie file. As a result, the session stays
+# alive as long as the dashboard process runs, even when the user is
+# AFK for hours. Without this, cookies die after ~5-15 min idle and
+# the user has to do a fresh MFA login.
+#
+# Runs as a daemon thread (dies with the process). Sleeps in short
+# slices so a Ctrl-C feels instant rather than waiting up to 290s.
+KEEPALIVE_INTERVAL_SEC = 290
+KEEPALIVE_SLICE_SEC = 5
+
+
+def _session_keepalive_loop() -> None:
+    # First refresh runs a bit after startup so we don't race the first
+    # /update from the UI (which may itself open Playwright for MFA).
+    next_due = time.time() + 60.0
+    while True:
+        # Sleep in small slices so the daemon thread is interruptible.
+        while time.time() < next_due:
+            time.sleep(KEEPALIVE_SLICE_SEC)
+        try:
+            # Only refresh if creds are configured — first-time setup
+            # shouldn't trigger Playwright in the background.
+            if PYTR_CREDS.is_file():
+                r = subprocess.run(
+                    [sys.executable, "-m", "tr_api.cli", "--json", "auth", "refresh"],
+                    capture_output=True, text=True, timeout=45,
+                )
+                envelope = json.loads(r.stdout or "{}")
+                ok = envelope.get("ok") and envelope.get("data", {}).get("ok")
+                changed = envelope.get("data", {}).get("cookies_changed") or []
+                print(
+                    f"[keepalive] refresh ok={bool(ok)} changed={changed}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+        except Exception as e:
+            print(f"[keepalive] refresh attempt failed: {e}", file=sys.stderr, flush=True)
+        next_due = time.time() + KEEPALIVE_INTERVAL_SEC
+
+
+_keepalive_thread = threading.Thread(
+    target=_session_keepalive_loop, daemon=True, name="tr-session-keepalive"
+)
+_keepalive_thread.start()
+
+
 os.chdir(PROJECT_DIR)
 with ThreadedServer(("", PORT), Handler) as httpd:
     print(f"🚀 Dashboard Server running at http://localhost:{PORT}/app/index.html")
+    print(f"🔁 Session keepalive thread started (refresh every {KEEPALIVE_INTERVAL_SEC}s)")
     httpd.serve_forever()

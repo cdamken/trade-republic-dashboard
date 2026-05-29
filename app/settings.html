@@ -90,6 +90,14 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif
 .status-msg { font-size: 12px; margin-left: 12px; color: var(--muted); }
 .status-msg.ok { color: var(--green); }
 .status-msg.err { color: var(--red); }
+/* PIN mask — input is type="text" so browsers don't treat it as a password
+   (no autofill, no "Save Password?" dialog from macOS / Chrome / 1Password).
+   Visually we render bullet glyphs instead of the real chars. */
+.pin-mask {
+  -webkit-text-security: disc;
+  -moz-text-security: disc;
+  text-security: disc;
+}
 </style>
 </head>
 <body>
@@ -148,8 +156,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif
       <div class="form-row">
         <label>PIN (4–6 digits)</label>
         <input type="password" name="password_dummy_a" style="display:none" tabindex="-1" autocomplete="new-password">
-        <input type="password" id="setting-pin" inputmode="numeric" maxlength="6" placeholder="••••"
-               name="tr_pin" autocomplete="new-password"
+        <!-- type="text" + CSS mask so neither Chrome nor macOS Passwords
+             treats this as a credential and offers to save it. -->
+        <input type="text" id="setting-pin" inputmode="numeric" maxlength="6" placeholder="••••"
+               class="pin-mask"
+               name="tr_pin" autocomplete="off"
                data-lpignore="true" data-1p-ignore data-bwignore>
       </div>
       <div class="form-row">
@@ -332,16 +343,22 @@ async function saveAccount() {
     setStatus('account-status', 'PIN must be 4–6 digits', 'err'); return;
   }
   setStatus('account-status', 'Saving…');
-  const r = await fetch('/setup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ phone, pin }),
-  });
-  if (r.ok) {
-    setStatus('account-status', '✓ Saved — click Update Now to authenticate', 'ok');
-    document.getElementById('setting-pin').value = '';
-  } else {
-    setStatus('account-status', 'Save failed', 'err');
+  try {
+    const r = await fetch('/setup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, pin }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.ok) {
+      setStatus('account-status', '✓ Saved — click Update Now to authenticate', 'ok');
+      document.getElementById('setting-pin').value = '';
+    } else {
+      const detail = body.detail || body.message || ('HTTP ' + r.status);
+      setStatus('account-status', 'Save failed: ' + detail, 'err');
+    }
+  } catch (e) {
+    setStatus('account-status', 'Save failed: ' + (e && e.message ? e.message : 'network error'), 'err');
   }
 }
 

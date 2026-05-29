@@ -32,6 +32,39 @@ PYTR_CREDS = Path.home() / ".pytr" / "credentials"
 TR_API_DIR = Path.home() / ".tr-api"
 DATA_DIR = PROJECT_DIR / "DATA"
 
+# Optional per-installation app settings (separate from credentials so
+# wiping creds doesn't lose the user's documents-folder choice). Stored
+# as JSON so future settings can join without schema churn.
+APP_CONFIG = Path.home() / ".pytr" / "dashboard_config.json"
+DEFAULT_DOCS_DIR = Path.home() / "Documents" / "Trade_Republic_Docs"
+
+
+def _read_app_config() -> dict:
+    if not APP_CONFIG.is_file():
+        return {}
+    try:
+        return json.loads(APP_CONFIG.read_text(encoding="utf-8")) or {}
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def _write_app_config(cfg: dict) -> None:
+    APP_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    tmp = APP_CONFIG.with_suffix(".tmp")
+    tmp.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    tmp.replace(APP_CONFIG)
+
+
+def _docs_out_dir() -> Path:
+    """Resolve the user-configured download path, with a sensible default
+    in ~/Documents/Trade_Republic_Docs/. Always expanded to an absolute path."""
+    cfg = _read_app_config()
+    raw = (cfg.get("documents_path") or "").strip()
+    if not raw:
+        return DEFAULT_DOCS_DIR
+    return Path(raw).expanduser().resolve()
+
 # Map tr_fetch.py exit codes to (HTTP status, JSON status string)
 EXIT_CODE_MAP = {
     0:  (200, "ok"),
@@ -195,6 +228,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "phone": phone,
             })
             return
+        if self.path == "/settings":
+            cfg = _read_app_config()
+            self._json(200, {
+                "documents_path": cfg.get("documents_path") or str(DEFAULT_DOCS_DIR),
+                "default_documents_path": str(DEFAULT_DOCS_DIR),
+            })
+            return
         # Don't expose the project root directory listing.
         if self.path in ("/", "/app", "/app/"):
             self.send_response(302)
@@ -212,6 +252,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._handle_reset()
         if self.path == "/download_docs":
             return self._handle_download_docs()
+        if self.path == "/settings":
+            return self._handle_settings_set()
         if self.path != "/update":
             self.send_response(404)
             self.end_headers()
@@ -442,6 +484,53 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         self._json(200, {"status": "ok", "removed": removed})
 
+    # ------------------------------------------------------------- settings
+    def _handle_settings_set(self):
+        """Update per-installation app settings. Currently supports:
+          - documents_path: where `docs download` writes PDFs
+
+        We don't auto-create the path here (that happens lazily on first
+        download) so the user can configure a network drive that's
+        currently disconnected.
+        """
+        length = int(self.headers.get("Content-Length") or 0)
+        if not length:
+            self._json(400, {"status": "bad_request", "detail": "empty body"})
+            return
+        try:
+            body = json.loads(self.rfile.read(length).decode("utf-8"))
+        except json.JSONDecodeError:
+            self._json(400, {"status": "bad_request", "detail": "invalid JSON"})
+            return
+
+        cfg = _read_app_config()
+        if "documents_path" in body:
+            new_path = (body.get("documents_path") or "").strip()
+            if new_path:
+                # Sanity check: expand ~, resolve, and verify it doesn't
+                # collapse to root/empty.
+                resolved = Path(new_path).expanduser()
+                if str(resolved).strip("/") == "":
+                    self._json(400, {
+                        "status": "bad_path",
+                        "detail": "documents_path cannot be empty or root",
+                    })
+                    return
+                cfg["documents_path"] = str(resolved)
+            else:
+                cfg.pop("documents_path", None)  # falls back to default
+
+        try:
+            _write_app_config(cfg)
+        except Exception as e:
+            self._json(500, {"status": "write_failed", "detail": str(e)})
+            return
+
+        self._json(200, {
+            "status": "ok",
+            "documents_path": cfg.get("documents_path") or str(DEFAULT_DOCS_DIR),
+        })
+
     # --------------------------------------------------------- download_docs
     def _handle_download_docs(self):
         """Download every PDF Trade Republic has issued for this account.
@@ -484,8 +573,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # and let the download attempt return whatever real error
             print(f"[docs] pre-ping failed: {e}", file=sys.stderr, flush=True)
 
-        out_dir = DATA_DIR / "documents"
-        out_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = _docs_out_dir()
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+        except (OSError, PermissionError) as e:
+            self._json(400, {
+                "status": "bad_path",
+                "detail": f"Cannot create documents folder {out_dir}: {e}. "
+                          f"Check your Settings or pick a different folder.",
+            })
+            return
 
         # Build tr-api CLI command. We always pass --json so we can parse the
         # exit envelope below.

@@ -330,6 +330,21 @@ tr:hover { background: rgba(255,255,255,0.02); }
            style="width:100%; background:var(--bg); border:2px solid var(--border); color:var(--text); padding:14px 16px; font-size:24px; border-radius:10px; text-align:center; letter-spacing:8px; font-family:monospace; margin-bottom:16px;"
            oninput="this.value=this.value.replace(/[^0-9]/g,'')"
            onkeydown="if(event.key==='Enter')submitSetup()">
+    <details id="setup-advanced" style="margin: 10px 0 16px 0; color: var(--muted);">
+      <summary style="cursor:pointer; padding:6px 0; font-size: 13px; user-select:none;">
+        ⚙️ Advanced — documents folder
+      </summary>
+      <label style="display:block; color:var(--muted); font-size:12px; margin: 12px 0 6px; text-transform:uppercase; letter-spacing:1px; font-weight:600;">
+        Documents folder
+      </label>
+      <input type="text" id="setup-docs-path" placeholder="~/Documents/Trade_Republic_Docs"
+             style="width:100%; background:var(--bg); border:2px solid var(--border); color:var(--text); padding:10px 14px; font-size:14px; border-radius:10px; font-family:monospace;">
+      <div style="font-size:12px; color:var(--muted); margin-top:6px;">
+        Where the <strong>📄 Documents</strong> button saves PDFs (trades, dividends, statements, tax).
+        Default: <code>~/Documents/Trade_Republic_Docs/</code>. Files are organised
+        as <code>&lt;year&gt;/&lt;kind&gt;/&lt;file&gt;.pdf</code>.
+      </div>
+    </details>
     <div id="setup-err" class="err-msg"></div>
     <div class="modal-actions">
       <!-- Cancel is hidden in first-time setup mode (user MUST configure
@@ -595,6 +610,14 @@ async function openSetupModal() {
   phoneInput.value = status.phone || '';
   pinInput.value = '';   // never pre-fill the PIN
 
+  // Pre-fill the documents path from /settings. Best-effort: if the
+  // request fails we leave the placeholder showing the default.
+  fetch('/settings').then(r => r.json()).then(s => {
+    document.getElementById('setup-docs-path').value = s.documents_path || '';
+    document.getElementById('setup-docs-path').placeholder =
+      s.default_documents_path || '~/Documents/Trade_Republic_Docs';
+  }).catch(() => {});
+
   document.getElementById('setup-modal').classList.add('open');
   document.getElementById('setup-err').classList.remove('show');
   // Focus PIN field if phone is already known; otherwise focus phone.
@@ -649,6 +672,17 @@ async function submitSetup() {
   const btn = document.getElementById('setup-submit-btn');
   btn.disabled = true;
   btn.textContent = 'Saving…';
+
+  // Save the documents path first (independent of phone/PIN setup, so a
+  // failure here doesn't block re-login). Best-effort: ignore errors.
+  const docsPath = document.getElementById('setup-docs-path').value.trim();
+  try {
+    await fetch('/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ documents_path: docsPath }),
+    });
+  } catch (_) {}
 
   try {
     const r = await fetch('/setup', {

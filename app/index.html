@@ -726,9 +726,19 @@ const updateBtn = () => document.getElementById('update-btn');
 const updateStatus = () => document.getElementById('update-status');
 const setUpdateBtn = (loading, label) => {
   const b = updateBtn();
+  if (!b) return;
   b.disabled = loading;
   b.classList.toggle('loading', loading);
-  b.querySelector('.label').textContent = label || 'Update Now';
+  // The button can be either `<button>🔄 Update Now</button>` (current
+  // top-bar) or the older `<button><span class="label">…</span></button>`
+  // shape. Support both — set .label if present, otherwise fall back to
+  // rewriting the whole button text (keeping the 🔄 emoji prefix).
+  const labelEl = b.querySelector('.label');
+  if (labelEl) {
+    labelEl.textContent = label || 'Update Now';
+  } else {
+    b.textContent = '🔄 ' + (label || 'Update Now');
+  }
 };
 const showStatus = (kind, msg) => {
   const s = updateStatus();

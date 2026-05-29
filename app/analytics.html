@@ -25,27 +25,20 @@ h1 { font-size: 28px; margin-bottom: 16px; display: flex; align-items: center; g
 .nav a { color: var(--blue); text-decoration: none; font-size: 15px; border: 1px solid var(--blue); padding: 10px 24px; border-radius: 10px; font-weight: 500; }
 .nav a.active { background: var(--blue); color: var(--bg); }
 
-/* Tighter grid — on wide screens promote to 3 columns where it makes sense. */
-.grid-top { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-.grid-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (min-width: 1500px) {
-  .grid-top, .grid-bottom { grid-template-columns: 1fr 1fr 1fr; }
-  .grid-top > .card:nth-child(3),
-  .grid-bottom > .card:nth-child(3) { display: none; }  /* placeholder slots */
-}
+.grid-top { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px; }
+.grid-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
 
-.card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 22px; display: flex; flex-direction: column; min-height: 320px; }
-h2 { font-size: 13px; margin-bottom: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
-.stat { font-size: 30px; font-weight: 800; margin-bottom: 4px; color: var(--text); }
-.substat { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px; display: flex; flex-direction: column; min-height: 520px; }
+h2 { font-size: 14px; margin-bottom: 20px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; }
+.stat { font-size: 52px; font-weight: 800; margin-bottom: 8px; color: var(--text); }
+.substat { color: var(--muted); font-size: 16px; margin-bottom: 24px; }
 
-.chart-container { flex-grow: 1; position: relative; width: 100%; height: 240px; }
+.chart-container { flex-grow: 1; position: relative; width: 100%; height: 350px; }
 
 table { width: 100%; border-collapse: collapse; }
-td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
-th { padding: 10px 12px; font-size: 12px; }
+td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
 .val { text-align: right; font-weight: 700; color: var(--green); }
-.date-cell { color: var(--muted); width: 110px; }
+.date-cell { color: var(--muted); width: 130px; }
 
 /* Range selector pills (used on Net Worth chart) */
 .range-buttons { display: flex; gap: 6px; margin: 8px 0 12px; flex-wrap: wrap; }
@@ -61,13 +54,13 @@ th { padding: 10px 12px; font-size: 12px; }
   background: var(--blue); color: var(--bg); border-color: var(--blue);
 }
 
-/* Cash Flow card — compact: smaller padding, smaller tile values. */
-.cf-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 22px; margin-bottom: 16px; }
-.cf-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
-.cf-tile { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
-.cf-tile .label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px; font-weight: 600; }
-.cf-tile .value { font-size: 20px; font-weight: 800; }
-.cf-tile .sub { color: var(--muted); font-size: 11px; margin-top: 2px; }
+/* Cash Flow card */
+.cf-card { background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 32px; margin-bottom: 24px; }
+.cf-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 24px; }
+.cf-tile { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.cf-tile .label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: 600; }
+.cf-tile .value { font-size: 28px; font-weight: 800; }
+.cf-tile .sub { color: var(--muted); font-size: 12px; margin-top: 4px; }
 .cf-tile.in .value  { color: var(--green); }
 .cf-tile.out .value { color: #f87171; }
 .cf-tile.pl-pos .value { color: var(--green); }
@@ -133,7 +126,7 @@ th { padding: 10px 12px; font-size: 12px; }
   </div>
 
   <!-- Trading totals (raw numbers, no chart) -->
-  <h2 style="margin-top: 18px;">Trading totals</h2>
+  <h2 style="margin-top: 32px;">Trading totals</h2>
   <div class="cf-grid">
     <div class="cf-tile out">
       <div class="label">Total stock purchases</div>
@@ -152,7 +145,7 @@ th { padding: 10px 12px; font-size: 12px; }
     </div>
   </div>
 
-  <div style="height: 200px; margin-top: 14px;"><canvas id="cashFlowChart"></canvas></div>
+  <div style="height: 260px; margin-top: 24px;"><canvas id="cashFlowChart"></canvas></div>
 </div>
 
 <div class="grid-top">
@@ -206,7 +199,7 @@ th { padding: 10px 12px; font-size: 12px; }
 </div>
 
 <!-- 5. Full dividend ledger — every payment, searchable + filterable -->
-<div class="card" style="margin-top:16px; min-height: auto;">
+<div class="card" style="margin-top:24px;">
   <h2>Dividend & Interest Ledger</h2>
   <div class="substat" id="div-ledger-substat">All recorded payments</div>
   <div style="display:flex; gap:10px; flex-wrap:wrap; margin:14px 0;">

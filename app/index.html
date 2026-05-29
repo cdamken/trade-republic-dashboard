@@ -985,8 +985,8 @@ async function load() {
       <div class="value">${fmtEUR(s.depot_buycost)}</div>
       <div class="delta">Sum of all buys</div></div>
     <div class="card"><div class="label">Total P/L</div>
-      <div class="value ${s.depot_pl_eur >= 0 ? 'green' : 'red'}">${fmtEUR(s.depot_pl_eur)}</div>
-      <div class="delta ${s.depot_pl_eur >= 0 ? 'green' : 'red'}">${fmtPct(s.depot_pl_pct)}</div></div>
+      <div class="value">${fmtEUR(s.depot_pl_eur)}</div>
+      <div class="delta">${fmtPct(s.depot_pl_pct)}</div></div>
     <div class="card"><div class="label">Active Positions</div>
       <div class="value">${state.data.positions_with_value}</div>
       <div class="delta">+ ${state.data.zero_value_positions.length} with no price</div></div>
@@ -1073,14 +1073,15 @@ function renderWealthBuckets(summary) {
     const b = by[key];
     if (!b || !b.count) continue;
     const meta = labels[key] || { name: key, icon: '·', color: '' };
-    const plClass = b.pl_eur >= 0 ? 'green' : 'red';
+    // P/L: sign only (no color) — user preference 2026-05-28.
+    // The +/− in fmtPct() already conveys direction.
     tiles.push(`
       <div class="card">
         <div class="label">${meta.icon} ${meta.name}</div>
         <div class="value ${meta.color}">${fmtEUR(b.net_value_eur)}</div>
         <div class="delta">
           ${b.count} position${b.count === 1 ? '' : 's'} · cost ${fmtEUR(b.buy_cost_eur)}
-          <span class="${plClass}" style="margin-left:6px">${fmtPct(b.pl_pct)}</span>
+          <span style="margin-left:6px">${fmtPct(b.pl_pct)}</span>
         </div>
       </div>
     `);

@@ -113,6 +113,53 @@ tr:hover { background: rgba(255,255,255,0.02); }
   transition: opacity 0.15s, color 0.15s, border-color 0.15s; }
 .ext-links a:hover { opacity: 1; color: var(--text); border-color: var(--muted); }
 
+/* Position name as a clickable link — subtle, opens detail modal. */
+.position-link { color: var(--text); text-decoration: none; border-bottom: 1px dotted transparent; }
+.position-link:hover { border-bottom-color: var(--muted); color: var(--blue); }
+
+/* Position detail modal — side panel with TR instrument iframe. */
+.position-modal-backdrop {
+  display: none; position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+  background: rgba(0, 0, 0, 0.6); z-index: 1000;
+  align-items: center; justify-content: flex-end;
+}
+.position-modal-backdrop.open { display: flex; }
+.position-modal-panel {
+  background: var(--card); width: min(540px, 100vw); height: 100vh;
+  display: flex; flex-direction: column; box-shadow: -8px 0 32px rgba(0,0,0,0.4);
+}
+.position-modal-header {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+}
+.position-modal-header h3 { font-size: 16px; flex: 1; margin: 0; }
+.position-modal-header code { font-size: 12px; color: var(--muted); }
+.position-modal-close {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+  width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 18px;
+  line-height: 1;
+}
+.position-modal-close:hover { color: var(--text); border-color: var(--text); }
+.position-modal-body { flex: 1; overflow: auto; padding: 20px; color: var(--text); }
+.pm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+.pm-stat { background: var(--bg); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--border); }
+.pm-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+.pm-value { font-size: 18px; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.pm-meta { color: var(--muted); font-size: 13px; margin: 12px 0; }
+.pm-meta code { color: var(--muted); font-size: 11px; }
+.pm-tip { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 12px;
+  padding: 10px 12px; background: var(--bg); border-radius: 6px; border-left: 2px solid var(--border); }
+.pm-tip code { background: rgba(255,255,255,0.05); padding: 1px 4px; border-radius: 3px; font-size: 11px; }
+.position-modal-links {
+  padding: 12px 20px; border-top: 1px solid var(--border);
+  display: flex; gap: 12px; flex-wrap: wrap;
+}
+.position-modal-links a {
+  color: var(--muted); font-size: 13px; text-decoration: none;
+  padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px;
+}
+.position-modal-links a:hover { color: var(--text); border-color: var(--muted); }
+
 /* Concentration warning banner — between the KPI cards and Wealth-by-Bucket. */
 .concentration {
   margin: 12px 0 24px;
@@ -403,6 +450,19 @@ tr:hover { background: rgba(255,255,255,0.02); }
 
 <div id="concentration" class="concentration" style="display:none"></div>
 
+<!-- Position detail modal (lazy-loaded TR instrument iframe) -->
+<div id="position-modal" class="position-modal-backdrop" onclick="if(event.target===this)closePositionModal()">
+  <div class="position-modal-panel">
+    <div class="position-modal-header">
+      <h3 id="position-modal-title">—</h3>
+      <code id="position-modal-isin">—</code>
+      <button class="position-modal-close" onclick="closePositionModal()" title="Close (Esc)">✕</button>
+    </div>
+    <div id="position-modal-body" class="position-modal-body"></div>
+    <div class="position-modal-links" id="position-modal-links"></div>
+  </div>
+</div>
+
 <div class="section" id="wealth-buckets-section" style="display:none" onclick="toggleSection('wealth-buckets')">
   <span class="toggle-icon">▼</span> 💼 Wealth by Bucket
   <span style="color:var(--muted); font-weight:400; font-size:0.85em; margin-left:8px;">
@@ -653,10 +713,24 @@ function closeSetupModal() {
   document.getElementById('setup-modal').classList.remove('open');
 }
 
+// Delegated click handler for position-link anchors (rows in the tables).
+// Uses event delegation so we don't re-bind every time the table re-renders.
+document.addEventListener('click', (e) => {
+  const a = e.target.closest && e.target.closest('a.position-link');
+  if (!a) return;
+  e.preventDefault();
+  openPositionModal(a.dataset.isin, a.dataset.name);
+});
+
 // Global ESC handler: closes whichever modal is on top, but never the
 // first-time setup modal (the user has nowhere to go without credentials).
 document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
+  const pos = document.getElementById('position-modal');
+  if (pos && pos.classList.contains('open')) {
+    closePositionModal();
+    return;
+  }
   const mfa = document.getElementById('mfa-modal');
   if (mfa && mfa.classList.contains('open')) {
     closeMfaModal();
@@ -1059,9 +1133,11 @@ function externalLinks(isin) {
 
 function rowHTML(p) {
   // No green/red — sign-only convention. The +/− in fmtPct() / fmtEUR()
-  // already conveys direction.
+  // already conveys direction. Clicking the name opens the TR mini-chart modal.
+  const safeIsin = String(p.isin || '').replace(/['"]/g, '');
+  const safeName = String(p.name || '').replace(/['"]/g, '');
   return `<tr>
-    <td title="${p.name}">${p.name}</td>
+    <td title="${p.name}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${p.name}</a></td>
     <td><code style="font-size:11px;color:var(--muted)">${p.isin}</code>${externalLinks(p.isin)}</td>
     <td class="num">${fmt(p.quantity, 4)}</td>
     <td class="num">${fmtEUR(p.avg_cost)}</td>
@@ -1074,14 +1150,86 @@ function rowHTML(p) {
 }
 
 function shortRow(p) {
+  const safeIsin = String(p.isin || '').replace(/['"]/g, '');
+  const safeName = String(p.name || '').replace(/['"]/g, '');
   return `<tr>
-    <td title="${p.name}">${p.name}</td>
+    <td title="${p.name}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${p.name}</a></td>
     <td><code style="font-size:11px;color:var(--muted)">${p.isin}</code>${externalLinks(p.isin)}</td>
     <td class="num">${fmt(p.quantity, 4)}</td>
     <td class="num"><strong>${fmtEUR(p.net_value_eur)}</strong></td>
     <td class="num">${fmtEUR(p.pl_eur)}</td>
     <td class="num"><strong>${fmtPct(p.pl_pct)}</strong></td>
   </tr>`;
+}
+
+// ----- Position detail modal -----
+// Clicking a position name opens a side-modal with a rich summary of the
+// position (qty/value/P/L from local data, dividend history if any) plus
+// external research links. We deliberately don't iframe TR or Yahoo —
+// both ship X-Frame-Options: SAMEORIGIN which blocks embedding. Opening
+// in a new tab is the only reliable path.
+function openPositionModal(isin, name) {
+  if (!isin || !state.data) return;
+  const pos = (state.data.all_positions || []).find(p => p.isin === isin);
+  if (!pos) return;
+  const modal = document.getElementById('position-modal');
+  document.getElementById('position-modal-title').textContent = name || pos.name || isin;
+  document.getElementById('position-modal-isin').textContent = isin;
+
+  // Body: rich summary
+  const body = document.getElementById('position-modal-body');
+  const plClass = pos.pl_eur >= 0 ? '' : '';  // sign-only convention
+  body.innerHTML = `
+    <div class="pm-grid">
+      <div class="pm-stat">
+        <div class="pm-label">Quantity</div>
+        <div class="pm-value">${fmt(pos.quantity, 4)}</div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-label">Avg cost</div>
+        <div class="pm-value">${fmtEUR(pos.avg_cost)}</div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-label">Current price</div>
+        <div class="pm-value">${fmtEUR(pos.current_price)}</div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-label">Invested</div>
+        <div class="pm-value">${fmtEUR(pos.buy_cost_eur)}</div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-label">Net value</div>
+        <div class="pm-value"><strong>${fmtEUR(pos.net_value_eur)}</strong></div>
+      </div>
+      <div class="pm-stat">
+        <div class="pm-label">P/L</div>
+        <div class="pm-value">${fmtEUR(pos.pl_eur)} (${fmtPct(pos.pl_pct)})</div>
+      </div>
+    </div>
+    <div class="pm-meta">
+      Category: <strong>${pos.category || 'unknown'}</strong>
+      · ISIN: <code>${isin}</code>
+    </div>
+    <p class="pm-tip">
+      Click the buttons below to open the live charts, fundamentals, news
+      and analyst pages in a new tab. We can't embed them here directly
+      because Trade Republic and Yahoo Finance both block iframe
+      embedding for security (<code>X-Frame-Options</code>).
+    </p>
+  `;
+
+  // Footer: external research links (open in new tabs).
+  const links = document.getElementById('position-modal-links');
+  links.innerHTML =
+    `<a href="https://app.traderepublic.com/instrument/${encodeURIComponent(isin)}" target="_blank" rel="noopener">📊 Trade Republic ↗</a>` +
+    `<a href="https://finance.yahoo.com/lookup/?s=${encodeURIComponent(isin)}" target="_blank" rel="noopener">Yahoo Finance ↗</a>` +
+    `<a href="https://stockanalysis.com/quote/iso/${encodeURIComponent(isin)}" target="_blank" rel="noopener">Stock Analysis ↗</a>` +
+    `<a href="https://www.google.com/search?q=${encodeURIComponent(isin + ' stock')}" target="_blank" rel="noopener">Google ↗</a>`;
+  modal.classList.add('open');
+}
+
+function closePositionModal() {
+  document.getElementById('position-modal').classList.remove('open');
 }
 
 function sortArray(arr, cfg) {

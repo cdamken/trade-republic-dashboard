@@ -183,18 +183,49 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
 </div>
 
 <div class="grid-bottom">
-  <!-- 3. Monthly Dividends -->
+  <!-- 3. Monthly Dividends chart -->
   <div class="card">
     <h2>Monthly Dividends</h2>
     <div class="stat" id="div-total">€0.00</div>
+    <div class="substat" id="div-substat">— payments from — issuers</div>
     <div class="chart-container"><canvas id="dividendChart"></canvas></div>
   </div>
-  <!-- 4. Recent Payments -->
+  <!-- 4. By issuer (top payers) -->
   <div class="card">
-    <h2>Recent Payments</h2>
-    <div class="substat">Last 10 received items</div>
-    <table id="recent-divs"></table>
+    <h2>Top Paying Issuers</h2>
+    <div class="substat">All-time, sorted by total received</div>
+    <table id="div-by-issuer"></table>
   </div>
+</div>
+
+<!-- 5. Full dividend ledger — every payment, searchable + filterable -->
+<div class="card" style="margin-top:24px;">
+  <h2>Dividend & Interest Ledger</h2>
+  <div class="substat" id="div-ledger-substat">All recorded payments</div>
+  <div style="display:flex; gap:10px; flex-wrap:wrap; margin:14px 0;">
+    <input type="text" id="div-search" placeholder="Search issuer / ISIN…"
+           style="flex:1 1 220px; min-width:180px; padding:8px 12px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; font-size:14px;">
+    <select id="div-month-filter" style="padding:8px 12px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; font-size:14px;">
+      <option value="">All months</option>
+    </select>
+    <select id="div-type-filter" style="padding:8px 12px; background:var(--bg); border:1px solid var(--border); color:var(--text); border-radius:6px; font-size:14px;">
+      <option value="">Dividends + Interest</option>
+      <option value="Dividend">Dividends only</option>
+      <option value="Interest">Interest only</option>
+    </select>
+  </div>
+  <table id="div-ledger" style="font-size:13px;">
+    <thead>
+      <tr>
+        <th style="text-align:left;">Date</th>
+        <th style="text-align:left;">Issuer</th>
+        <th style="text-align:left;">ISIN</th>
+        <th style="text-align:left;">Type</th>
+        <th class="num">Amount</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 </div>
 
 <script>
@@ -580,7 +611,101 @@ async function init() {
     },
   });
 
-  document.getElementById('recent-divs').innerHTML = data.dividends.recent.map(d => "<tr><td class=\"date-cell\">" + d.date + "</td><td>" + d.name + "</td><td class=\"val\">+€" + d.amount.toFixed(2) + "</td></tr>").join('');
+  // ============ Dividends — by issuer + full ledger ============
+  renderDividendsByIssuer(data.dividends);
+  renderDividendLedger(data.dividends);
+  wireDividendFilters(data.dividends);
+}
+
+function renderDividendsByIssuer(div) {
+  // Sort issuers by total received, top 25.
+  const rows = Object.values(div.by_issuer || {})
+    .sort((a, b) => b.total - a.total).slice(0, 25);
+  const total = div.total_received || 0;
+  const count = div.count || 0;
+  const issuers = Object.keys(div.by_issuer || {}).length;
+  document.getElementById('div-substat').textContent =
+    count + ' payments from ' + issuers + ' issuers';
+
+  const tbl = document.getElementById('div-by-issuer');
+  if (!rows.length) { tbl.innerHTML = '<tbody><tr><td>No dividends yet.</td></tr></tbody>'; return; }
+  tbl.innerHTML =
+    '<thead><tr>' +
+      '<th style="text-align:left;">Issuer</th>' +
+      '<th class="num">Pays</th>' +
+      '<th class="num">Total</th>' +
+      '<th class="num">% of all</th>' +
+    '</tr></thead><tbody>' +
+    rows.map(r => {
+      const pct = total > 0 ? (r.total / total * 100).toFixed(1) : '0.0';
+      return '<tr>' +
+        '<td>' + (r.name || r.isin || '—').slice(0, 30) +
+          (r.isin ? ' <code style="font-size:10px;color:var(--muted);">' + r.isin + '</code>' : '') +
+          '</td>' +
+        '<td class="num">' + r.count + '</td>' +
+        '<td class="num"><strong>' + fmtEur(r.total) + '</strong></td>' +
+        '<td class="num">' + pct + '%</td>' +
+      '</tr>';
+    }).join('') +
+    '</tbody>';
+}
+
+let _divLedgerState = { search: '', month: '', type: '', items: [] };
+
+function renderDividendLedger(div) {
+  _divLedgerState.items = div.all_payments || div.recent || [];
+  // Populate the month filter with unique months from the data.
+  const months = [...new Set(_divLedgerState.items.map(p => (p.date || '').slice(0, 7)))]
+    .filter(m => m).sort().reverse();
+  const sel = document.getElementById('div-month-filter');
+  // Keep the "All months" first option
+  sel.innerHTML = '<option value="">All months</option>' +
+    months.map(m => '<option value="' + m + '">' + m + '</option>').join('');
+  renderLedgerRows();
+}
+
+function renderLedgerRows() {
+  const s = _divLedgerState;
+  const filtered = s.items.filter(p => {
+    if (s.month && !(p.date || '').startsWith(s.month)) return false;
+    if (s.type && p.type !== s.type) return false;
+    if (s.search) {
+      const t = s.search.toLowerCase();
+      const hay = ((p.name || '') + ' ' + (p.isin || '')).toLowerCase();
+      if (!hay.includes(t)) return false;
+    }
+    return true;
+  });
+  document.getElementById('div-ledger-substat').textContent =
+    filtered.length + ' of ' + s.items.length + ' payments shown · sum ' +
+    fmtEur(filtered.reduce((a, p) => a + (p.amount || 0), 0));
+  const tbody = document.querySelector('#div-ledger tbody');
+  tbody.innerHTML = filtered.slice(0, 500).map(p =>
+    '<tr>' +
+      '<td>' + (p.date || '') + '</td>' +
+      '<td>' + (p.name || '') + '</td>' +
+      '<td><code style="font-size:11px;color:var(--muted)">' + (p.isin || '—') + '</code></td>' +
+      '<td>' + (p.type || 'Dividend') + '</td>' +
+      '<td class="num">+' + fmtEur(p.amount || 0) + '</td>' +
+    '</tr>'
+  ).join('') + (filtered.length > 500
+    ? '<tr><td colspan="5" style="text-align:center;color:var(--muted);font-size:12px;">(showing first 500 — refine filters to see more)</td></tr>'
+    : '');
+}
+
+function wireDividendFilters(div) {
+  document.getElementById('div-search').oninput = (e) => {
+    _divLedgerState.search = e.target.value.trim();
+    renderLedgerRows();
+  };
+  document.getElementById('div-month-filter').onchange = (e) => {
+    _divLedgerState.month = e.target.value;
+    renderLedgerRows();
+  };
+  document.getElementById('div-type-filter').onchange = (e) => {
+    _divLedgerState.type = e.target.value;
+    renderLedgerRows();
+  };
 }
 init();
 </script>

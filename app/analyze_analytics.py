@@ -55,7 +55,10 @@ def process_analytics():
         "dividends": {
             "monthly": {},
             "total_received": 0,
+            "count": 0,
             "recent": [],
+            "all_payments": [],   # full history (date, name, isin, amount, type)
+            "by_issuer": {},      # name -> {count, total, isin, last_date}
         },
         "allocation": {
             "categories": {"Stocks": 0, "ETFs": 0, "Crypto": 0, "Cash": 0},
@@ -109,19 +112,45 @@ def process_analytics():
                     cf["sells"]["count"] += 1
                     cf["sells"]["total"] += abs_val
 
-                # Dividends section (chart + recent), independent of cash_flow
+                # Dividends section (chart + full history + by-issuer breakdown).
+                # Independent of cash_flow.
                 if t_type == "Dividend" or t_type == "Interest":
-                    analytics_data["dividends"]["monthly"][month] = \
-                        analytics_data["dividends"]["monthly"].get(month, 0) + abs_val
-                    analytics_data["dividends"]["total_received"] += abs_val
-                    analytics_data["dividends"]["recent"].append({
+                    div = analytics_data["dividends"]
+                    div["monthly"][month] = div["monthly"].get(month, 0) + abs_val
+                    div["total_received"] += abs_val
+                    div["count"] += 1
+                    name = row.get('Note', 'Unknown') or 'Unknown'
+                    isin = row.get('ISIN', '') or ''
+                    div["all_payments"].append({
                         "date": date_str,
-                        "name": row.get('Note', 'Unknown'),
+                        "name": name,
+                        "isin": isin,
                         "amount": abs_val,
+                        "type": t_type,    # "Dividend" or "Interest"
                     })
+                    # Aggregate by issuer name (with ISIN if available).
+                    key = name
+                    bi = div["by_issuer"].setdefault(key, {
+                        "name": name, "isin": isin,
+                        "count": 0, "total": 0.0,
+                        "first_date": date_str, "last_date": date_str,
+                    })
+                    bi["count"] += 1
+                    bi["total"] += abs_val
+                    # Track date range for the issuer
+                    if date_str < bi["first_date"]: bi["first_date"] = date_str
+                    if date_str > bi["last_date"]:  bi["last_date"] = date_str
+                    # Pick up an ISIN if a later row has one and we didn't.
+                    if not bi["isin"] and isin: bi["isin"] = isin
 
-        analytics_data["dividends"]["recent"].sort(key=lambda x: x['date'], reverse=True)
-        analytics_data["dividends"]["recent"] = analytics_data["dividends"]["recent"][:10]
+        # Sort full history newest-first, keep `recent` as the first 10 for
+        # backwards compatibility with anything that still reads it.
+        div = analytics_data["dividends"]
+        div["all_payments"].sort(key=lambda x: x['date'], reverse=True)
+        div["recent"] = div["all_payments"][:10]
+        # Round totals on by_issuer for cleaner JSON.
+        for bi in div["by_issuer"].values():
+            bi["total"] = round(bi["total"], 2)
 
     cf = analytics_data["cash_flow"]
     # "Net capital in TR" = capital you've put into TR for investing, net

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TR Settings</title>
+<style>
+:root {
+  --bg: #0f1419; --card: #1a1f2e; --border: #2a3142;
+  --text: #e8eef5; --muted: #7a8599;
+  --blue: #60a5fa; --green: #4ade80; --red: #f87171; --amber: #fbbf24;
+  --asset-equity: #60a5fa; --asset-bonds: #d4a574; --asset-pe: #a78bfa;
+  --asset-crypto: #fb923c; --asset-cash: #94a3b8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; font-size: 14px; }
+
+/* Top-bar + cockpit — same markup/CSS as index.html / glossary.html */
+.top-bar { display: flex; align-items: center; gap: 16px; justify-content: space-between;
+  padding: 14px 24px 10px; margin: -24px -24px 0; }
+.top-bar .brand { display: flex; align-items: center; gap: 10px; }
+.top-bar h1 { font-size: 18px; font-weight: 700; }
+.top-bar .logo-box { background: #fff; width: 28px; height: 28px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.top-bar nav { display: flex; gap: 4px; flex: 1; justify-content: center; }
+.top-bar nav a { color: var(--muted); text-decoration: none; font-size: 13px;
+  padding: 8px 16px; border-radius: 8px; font-weight: 500; border: 1px solid transparent; cursor: pointer; }
+.top-bar nav a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.top-bar nav a.active { color: var(--blue); background: rgba(96,165,250,0.08); border-color: var(--blue); }
+.top-bar .actions { display: flex; gap: 8px; }
+.top-bar .actions button { background: var(--blue); color: var(--bg); border: none;
+  padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.top-bar .actions button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+
+.cockpit { position: sticky; top: 0; z-index: 50;
+  background: rgba(15,20,25,0.95); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border); padding: 14px 24px 12px; margin: 0 -24px 24px; }
+.cockpit-row { display: grid; gap: 18px; align-items: center; }
+.cockpit-row.kpis { grid-template-columns: 2fr 1fr 1fr 1fr; margin-bottom: 10px; }
+.cockpit-row.buckets { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.cockpit .ck-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+.cockpit .ck-value { font-size: 26px; font-weight: 800; margin-top: 2px; }
+.cockpit .ck-sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
+.cockpit .ck-value.big { font-size: 32px; }
+.cockpit .b-pill { background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; }
+.cockpit .b-pill .b-label { font-size: 10px; color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px; }
+.cockpit .b-pill .b-value { font-size: 16px; font-weight: 700; margin-top: 2px; }
+.cockpit .b-pill .b-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.asset-equity { color: var(--asset-equity); }
+.asset-bonds { color: var(--asset-bonds); }
+.asset-pe { color: var(--asset-pe); }
+.asset-crypto { color: var(--asset-crypto); }
+.asset-cash { color: var(--asset-cash); }
+
+/* Settings layout: left sidebar + right content */
+.settings-grid { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+@media (max-width: 900px) { .settings-grid { grid-template-columns: 1fr; } }
+
+.settings-side { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 8px; position: sticky; top: 200px; }
+.settings-side a { display: block; color: var(--muted); padding: 9px 14px; font-size: 13px;
+  border-radius: 8px; text-decoration: none; font-weight: 500; margin-bottom: 2px; }
+.settings-side a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.settings-side a.active { color: var(--text); background: rgba(96,165,250,0.08);
+  border-left: 2px solid var(--blue); padding-left: 12px; }
+
+.settings-section { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  padding: 22px; margin-bottom: 14px; }
+.settings-section h3 { font-size: 15px; margin-bottom: 4px; }
+.settings-section .help { color: var(--muted); font-size: 12px; margin-bottom: 16px; }
+
+.form-row { display: grid; grid-template-columns: 180px 1fr; gap: 14px; align-items: center;
+  margin-bottom: 12px; }
+@media (max-width: 700px) { .form-row { grid-template-columns: 1fr; } }
+.form-row label { color: var(--muted); font-size: 13px; }
+.form-row input, .form-row select { padding: 8px 12px; background: var(--bg);
+  border: 1px solid var(--border); color: var(--text); border-radius: 6px; font-size: 14px; width: 100%; }
+.form-row input:focus, .form-row select:focus { outline: none; border-color: var(--blue); }
+
+.btn { padding: 8px 14px; background: var(--blue); color: var(--bg); border: none;
+  border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.btn:hover { filter: brightness(1.1); }
+.btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn.ghost:hover { border-color: var(--muted); }
+.btn.danger { background: rgba(248,113,113,0.1); color: var(--red); border: 1px solid var(--red); }
+.btn.danger:hover { background: rgba(248,113,113,0.2); }
+
+.status-msg { font-size: 12px; margin-left: 12px; color: var(--muted); }
+.status-msg.ok { color: var(--green); }
+.status-msg.err { color: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="brand">
+    <div class="logo-box">📊</div>
+    <h1>Trade Republic</h1>
+  </div>
+  <nav>
+    <a href="index.html">Portfolio</a>
+    <a href="analytics.html">Analytics</a>
+    <a href="settings.html" class="active">⚙ Settings</a>
+    <a href="glossary.html">📖 Glossary</a>
+  </nav>
+  <div class="actions">
+    <button class="ghost" onclick="location.href='index.html#docs'">📄 Documents</button>
+    <button onclick="location.href='index.html#update'">🔄 Update Now</button>
+  </div>
+</div>
+
+<div class="cockpit">
+  <div class="cockpit-row kpis">
+    <div><div class="ck-label">Total Net Wealth</div><div class="ck-value big" id="ck-total">€0.00</div><div class="ck-sub" id="ck-total-sub">—</div></div>
+    <div><div class="ck-label">Investment Cost</div><div class="ck-value" id="ck-cost">€0.00</div><div class="ck-sub">Sum of all buys</div></div>
+    <div><div class="ck-label">Total P/L</div><div class="ck-value" id="ck-pl">€0.00</div><div class="ck-sub" id="ck-pl-pct">0.00%</div></div>
+    <div><div class="ck-label">Available Cash</div><div class="ck-value asset-cash" id="ck-cash">€0.00</div><div class="ck-sub">To be reinvested</div></div>
+  </div>
+  <div class="cockpit-row buckets" id="ck-buckets"></div>
+</div>
+
+<div class="settings-grid">
+  <aside class="settings-side">
+    <a href="#s-account" class="active">👤 Account</a>
+    <a href="#s-documents">📄 Documents</a>
+    <a href="#s-display">🎨 Display</a>
+    <a href="#s-data">💾 Data</a>
+    <a href="#s-danger">⚠️ Danger zone</a>
+    <a href="#s-about" style="border-top: 1px solid var(--border); margin-top: 4px; padding-top: 10px;">ℹ️ About</a>
+  </aside>
+
+  <div>
+    <!-- Account -->
+    <div class="settings-section" id="s-account">
+      <h3>👤 Account</h3>
+      <p class="help">Your Trade Republic phone and PIN. PIN is stored locally at <code>~/.pytr/credentials</code> with 0600 permissions.</p>
+      <div class="form-row">
+        <label>Phone (international)</label>
+        <input type="tel" id="setting-phone" placeholder="+4912345678" autocomplete="tel">
+      </div>
+      <div class="form-row">
+        <label>PIN (4–6 digits)</label>
+        <input type="password" id="setting-pin" inputmode="numeric" maxlength="6" placeholder="••••">
+      </div>
+      <div class="form-row">
+        <label></label>
+        <div>
+          <button class="btn" onclick="saveAccount()">Save</button>
+          <span class="status-msg" id="account-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Documents -->
+    <div class="settings-section" id="s-documents">
+      <h3>📄 Documents</h3>
+      <p class="help">Where the <strong>📄 Documents</strong> button saves PDFs. Existing files migrate
+        automatically when you change this path. Layout: <code>&lt;folder&gt;/&lt;year&gt;/&lt;kind&gt;/&lt;file&gt;.pdf</code>.</p>
+      <div class="form-row">
+        <label>Documents folder</label>
+        <input type="text" id="setting-docs-path" placeholder="~/Documents/Trade_Republic_Docs">
+      </div>
+      <div class="form-row">
+        <label></label>
+        <div>
+          <button class="btn" onclick="saveDocsPath()">Save</button>
+          <span class="status-msg" id="docs-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Display -->
+    <div class="settings-section" id="s-display">
+      <h3>🎨 Display</h3>
+      <p class="help">Appearance preferences (saved in your browser, not on the server).</p>
+      <div class="form-row">
+        <label>P/L color mode</label>
+        <select id="setting-pl-color">
+          <option value="sign">Sign only (no color) — current</option>
+          <option value="color">Green / red</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Theme</label>
+        <select id="setting-theme" disabled>
+          <option>Dark (only option for now)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Data -->
+    <div class="settings-section" id="s-data">
+      <h3>💾 Data &amp; sync</h3>
+      <p class="help">Session keep-alive runs in the background while the server is up.</p>
+      <div class="form-row">
+        <label>Last fetch</label>
+        <div style="color: var(--muted); font-size: 13px;" id="last-fetch">—</div>
+      </div>
+      <div class="form-row">
+        <label>Session status</label>
+        <div style="font-size: 13px;" id="session-status">checking…</div>
+      </div>
+      <div class="form-row">
+        <label></label>
+        <div>
+          <button class="btn ghost" onclick="manualRefresh()">↻ Refresh now</button>
+          <span class="status-msg" id="refresh-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Danger zone -->
+    <div class="settings-section" id="s-danger">
+      <h3>⚠️ Danger zone</h3>
+      <p class="help">Destructive actions. Confirmation required.</p>
+      <div class="form-row">
+        <label>Reset everything</label>
+        <div>
+          <button class="btn danger" onclick="resetAll()">🗑 Wipe data + credentials</button>
+          <span class="status-msg" id="reset-status"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- About -->
+    <div class="settings-section" id="s-about">
+      <h3>ℹ️ About</h3>
+      <p class="help">Source repos and links.</p>
+      <ul style="color: var(--muted); font-size: 13px; line-height: 1.8; list-style: none;">
+        <li>📦 <code>tr-api</code> — <a href="https://github.com/cdamken/tr-api" target="_blank" style="color: var(--blue);">cdamken/tr-api</a></li>
+        <li>📦 Dashboard — <a href="https://github.com/cdamken/trade-republic-dashboard" target="_blank" style="color: var(--blue);">cdamken/trade-republic-dashboard</a></li>
+        <li>📦 ownCloud port — <a href="https://github.com/cdamken/trade-republic-owncloud" target="_blank" style="color: var(--blue);">cdamken/trade-republic-owncloud</a></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+const fmtEUR = (n) => '€' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtPct = (n) => (n >= 0 ? '+' : '') + (n || 0).toFixed(2) + '%';
+
+// Populate the cockpit from portfolio.json (same as glossary.html)
+async function loadCockpit() {
+  try {
+    const r = await fetch('../DATA/portfolio.json?t=' + Date.now());
+    if (!r.ok) return;
+    const data = await r.json();
+    const s = data.summary;
+    document.getElementById('ck-total').textContent = fmtEUR(s.total_netvalue);
+    document.getElementById('ck-total-sub').textContent =
+      'Depot ' + fmtEUR(s.depot_netvalue) + ' + Cash ' + fmtEUR(s.cash_eur) +
+      ' · ' + data.positions_with_value + ' positions';
+    document.getElementById('ck-cost').textContent = fmtEUR(s.depot_buycost);
+    document.getElementById('ck-pl').textContent = fmtEUR(s.depot_pl_eur);
+    document.getElementById('ck-pl-pct').textContent = fmtPct(s.depot_pl_pct);
+    document.getElementById('ck-cash').textContent = fmtEUR(s.cash_eur);
+
+    const labels = {
+      stocksAndETFs: { name: 'Brokerage (Stocks/ETFs)', icon: '📈', color: 'asset-equity' },
+      bonds: { name: 'Bonds', icon: '🏛', color: 'asset-bonds' },
+      privateMarkets: { name: 'Private Equity', icon: '🔒', color: 'asset-pe' },
+      cryptos: { name: 'Crypto', icon: '🪙', color: 'asset-crypto' },
+      others: { name: 'Others', icon: '·', color: 'asset-cash' },
+    };
+    const by = s.by_category || {};
+    const pills = [];
+    for (const key of ['stocksAndETFs', 'bonds', 'privateMarkets', 'cryptos', 'others']) {
+      const b = by[key];
+      if (!b || !b.count) continue;
+      const m = labels[key];
+      pills.push('<div class="b-pill">' +
+        '<div class="b-label">' + m.icon + ' ' + m.name + '</div>' +
+        '<div class="b-value ' + m.color + '">' + fmtEUR(b.net_value_eur) + '</div>' +
+        '<div class="b-sub">' + b.count + ' pos · ' + fmtPct(b.pl_pct) + '</div>' +
+      '</div>');
+    }
+    pills.push('<div class="b-pill">' +
+      '<div class="b-label">💶 Cash</div>' +
+      '<div class="b-value asset-cash">' + fmtEUR(s.cash_eur) + '</div>' +
+      '<div class="b-sub">to invest / withdraw</div>' +
+      '</div>');
+    document.getElementById('ck-buckets').innerHTML = pills.join('');
+  } catch (_) {}
+}
+
+async function loadSettings() {
+  // Phone
+  try {
+    const r = await fetch('/setup_status');
+    const j = await r.json();
+    if (j.phone) document.getElementById('setting-phone').value = j.phone;
+    document.getElementById('last-fetch').textContent =
+      j.setup_complete ? 'Configured · check Update Now for next refresh' : 'Not configured yet';
+  } catch (_) {}
+
+  // Documents path
+  try {
+    const r = await fetch('/settings');
+    const j = await r.json();
+    document.getElementById('setting-docs-path').value = j.documents_path || '';
+    document.getElementById('setting-docs-path').placeholder = j.default_documents_path || '~/Documents/Trade_Republic_Docs';
+  } catch (_) {}
+
+  // Session status — try a quick subprocess ping via /update? simpler: just show "see Update Now"
+  document.getElementById('session-status').innerHTML = '<span style="color: var(--muted);">Click "Refresh now" to test</span>';
+}
+
+function setStatus(id, msg, kind) {
+  const el = document.getElementById(id);
+  el.className = 'status-msg' + (kind ? ' ' + kind : '');
+  el.textContent = msg;
+  if (kind === 'ok') setTimeout(() => { el.textContent = ''; el.className = 'status-msg'; }, 3000);
+}
+
+async function saveAccount() {
+  const phone = document.getElementById('setting-phone').value.trim();
+  const pin = document.getElementById('setting-pin').value.trim();
+  if (!/^\+\d{8,15}$/.test(phone)) {
+    setStatus('account-status', 'Phone must look like +4912345678', 'err'); return;
+  }
+  if (!/^\d{4,6}$/.test(pin)) {
+    setStatus('account-status', 'PIN must be 4–6 digits', 'err'); return;
+  }
+  setStatus('account-status', 'Saving…');
+  const r = await fetch('/setup', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, pin }),
+  });
+  if (r.ok) {
+    setStatus('account-status', '✓ Saved — click Update Now to authenticate', 'ok');
+    document.getElementById('setting-pin').value = '';
+  } else {
+    setStatus('account-status', 'Save failed', 'err');
+  }
+}
+
+async function saveDocsPath() {
+  const path = document.getElementById('setting-docs-path').value.trim();
+  setStatus('docs-status', 'Saving…');
+  const r = await fetch('/settings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ documents_path: path }),
+  });
+  const j = await r.json();
+  if (r.ok) {
+    let msg = '✓ Saved';
+    if (j.migrated_files) msg += ` — moved ${j.migrated_files} existing file${j.migrated_files === 1 ? '' : 's'}`;
+    setStatus('docs-status', msg, 'ok');
+  } else {
+    setStatus('docs-status', j.detail || 'Save failed', 'err');
+  }
+}
+
+async function manualRefresh() {
+  setStatus('refresh-status', 'Refreshing session…');
+  // The server already has a background keepalive thread; here we just trigger
+  // an /update call which auto-refreshes if needed.
+  // (No-op for now; full refresh requires the update flow with MFA possibly)
+  setStatus('refresh-status', 'Use "Update Now" in the top bar — it auto-refreshes before fetching.', 'ok');
+}
+
+function resetAll() {
+  if (!confirm('Permanently wipe ALL data, credentials, and session cookies?\n\nYou will need to log in again from scratch. This cannot be undone.')) return;
+  if (prompt('Type "delete" to confirm') !== 'delete') return;
+  fetch('/reset', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ confirm: 'delete' }),
+  }).then(r => {
+    if (r.ok) {
+      setStatus('reset-status', '✓ Wiped — redirecting to setup…', 'ok');
+      setTimeout(() => location.href = 'index.html', 1500);
+    } else {
+      setStatus('reset-status', 'Reset failed', 'err');
+    }
+  });
+}
+
+// Highlight active sidebar link as you scroll
+function wireSideNav() {
+  const links = document.querySelectorAll('.settings-side a');
+  links.forEach(a => a.addEventListener('click', (e) => {
+    links.forEach(l => l.classList.remove('active'));
+    a.classList.add('active');
+  }));
+}
+
+loadCockpit();
+loadSettings();
+wireSideNav();
+</script>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TR Glossary</title>
+<style>
+:root {
+  --bg: #0f1419; --card: #1a1f2e; --border: #2a3142;
+  --text: #e8eef5; --muted: #7a8599;
+  --blue: #60a5fa; --green: #4ade80; --red: #f87171; --amber: #fbbf24;
+  --asset-equity: #60a5fa; --asset-bonds: #d4a574; --asset-pe: #a78bfa;
+  --asset-crypto: #fb923c; --asset-cash: #94a3b8;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5; font-size: 14px; }
+
+/* Same top-bar + cockpit styles as index.html — kept inline so each page
+   is self-contained and reachable via direct URL without shared CSS. */
+.top-bar { display: flex; align-items: center; gap: 16px; justify-content: space-between;
+  padding: 14px 24px 10px; margin: -24px -24px 0; }
+.top-bar .brand { display: flex; align-items: center; gap: 10px; }
+.top-bar h1 { font-size: 18px; font-weight: 700; }
+.top-bar .logo-box { background: #fff; width: 28px; height: 28px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.top-bar nav { display: flex; gap: 4px; flex: 1; justify-content: center; }
+.top-bar nav a { color: var(--muted); text-decoration: none; font-size: 13px;
+  padding: 8px 16px; border-radius: 8px; font-weight: 500;
+  border: 1px solid transparent; cursor: pointer; }
+.top-bar nav a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.top-bar nav a.active { color: var(--blue); background: rgba(96,165,250,0.08); border-color: var(--blue); }
+.top-bar .actions { display: flex; gap: 8px; }
+.top-bar .actions button { background: var(--blue); color: var(--bg); border: none;
+  padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.top-bar .actions button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+
+.cockpit { position: sticky; top: 0; z-index: 50;
+  background: rgba(15,20,25,0.95); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border); padding: 14px 24px 12px;
+  margin: 0 -24px 24px; }
+.cockpit-row { display: grid; gap: 18px; align-items: center; }
+.cockpit-row.kpis    { grid-template-columns: 2fr 1fr 1fr 1fr; margin-bottom: 10px; }
+.cockpit-row.buckets { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.cockpit .ck-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+.cockpit .ck-value { font-size: 26px; font-weight: 800; margin-top: 2px; }
+.cockpit .ck-sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
+.cockpit .ck-value.big { font-size: 32px; }
+.cockpit .b-pill { background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; }
+.cockpit .b-pill .b-label { font-size: 10px; color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px; }
+.cockpit .b-pill .b-value { font-size: 16px; font-weight: 700; margin-top: 2px; }
+.cockpit .b-pill .b-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.asset-equity { color: var(--asset-equity); }
+.asset-bonds { color: var(--asset-bonds); }
+.asset-pe { color: var(--asset-pe); }
+.asset-crypto { color: var(--asset-crypto); }
+.asset-cash { color: var(--asset-cash); }
+
+/* Glossary specific */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 22px; }
+.card h2 { font-size: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 600; margin-bottom: 8px; }
+.card .substat { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+.glossary { display: grid; grid-template-columns: 1fr; gap: 14px; }
+.glossary dt { font-weight: 700; color: var(--text); font-size: 14px;
+  border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.glossary dd { color: var(--muted); font-size: 13px; line-height: 1.6; margin-left: 0; }
+.glossary dd code { background: rgba(255,255,255,0.05); color: var(--text);
+  padding: 1px 6px; border-radius: 3px; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<!-- Same top-bar as Portfolio / Analytics — keeps the four tabs visible. -->
+<div class="top-bar">
+  <div class="brand">
+    <div class="logo-box">📊</div>
+    <h1>Trade Republic</h1>
+  </div>
+  <nav>
+    <a href="index.html">Portfolio</a>
+    <a href="analytics.html">Analytics</a>
+    <a href="settings.html">⚙ Settings</a>
+    <a href="glossary.html" class="active">📖 Glossary</a>
+  </nav>
+  <div class="actions">
+    <button class="ghost" onclick="location.href='index.html#docs'">📄 Documents</button>
+    <button onclick="location.href='index.html#update'">🔄 Update Now</button>
+  </div>
+</div>
+
+<!-- Cockpit (read-only here — values pulled from portfolio.json on load). -->
+<div class="cockpit">
+  <div class="cockpit-row kpis">
+    <div>
+      <div class="ck-label">Total Net Wealth</div>
+      <div class="ck-value big" id="ck-total">€0.00</div>
+      <div class="ck-sub" id="ck-total-sub">—</div>
+    </div>
+    <div>
+      <div class="ck-label">Investment Cost</div>
+      <div class="ck-value" id="ck-cost">€0.00</div>
+      <div class="ck-sub">Sum of all buys</div>
+    </div>
+    <div>
+      <div class="ck-label">Total P/L</div>
+      <div class="ck-value" id="ck-pl">€0.00</div>
+      <div class="ck-sub" id="ck-pl-pct">0.00%</div>
+    </div>
+    <div>
+      <div class="ck-label">Available Cash</div>
+      <div class="ck-value asset-cash" id="ck-cash">€0.00</div>
+      <div class="ck-sub">To be reinvested</div>
+    </div>
+  </div>
+  <div class="cockpit-row buckets" id="ck-buckets"></div>
+</div>
+
+<div class="card">
+  <h2>📖 Glossary</h2>
+  <div class="substat">Every term used in this dashboard, in plain language.</div>
+
+  <dl class="glossary">
+    <dt>Total Net Wealth</dt>
+    <dd>Everything you own inside Trade Republic right now, at current market prices.
+        Sum of all positions (stocks, ETFs, bonds, crypto, private equity) plus your cash balance.</dd>
+
+    <dt>Wealth by Bucket — Brokerage, Bonds, Private Equity, Crypto, Cash</dt>
+    <dd>Different "buckets" TR uses internally. The official mobile app shows each as a separate tile.
+        <strong>Brokerage</strong> covers stocks and ETFs — usually the biggest one. Each pill in the
+        sticky cockpit at the top shows the value, position count, and total P/L for one bucket.</dd>
+
+    <dt>Deposits</dt>
+    <dd>Money you sent <em>from</em> your own bank account <em>to</em> Trade Republic.
+        Still your money, just inside the broker, ready to invest.</dd>
+
+    <dt>Withdrawals</dt>
+    <dd>The opposite: money sent <em>from</em> Trade Republic <em>back to</em> your bank.
+        Reduces "Net capital in TR".</dd>
+
+    <dt>Card spending (a.k.a. Removals)</dt>
+    <dd>Money that left your TR cash balance via the Trade Republic card (lifestyle consumption — coffee,
+        groceries, restaurants). Different from Withdrawals: it wasn't moved to your bank, it was spent.</dd>
+
+    <dt>Tax refunds</dt>
+    <dd>When TR recovers tax that was over-withheld on a dividend, it credits the difference back to you.
+        Counts as money "in".</dd>
+
+    <dt>Net capital in TR</dt>
+    <dd><code>Deposits + Tax refunds − Withdrawals</code>. The money you've committed to Trade Republic
+        for investing. Card spending is NOT subtracted because that's lifestyle, not capital outflow for
+        investing purposes.</dd>
+
+    <dt>Current value</dt>
+    <dd>Today's portfolio + cash at live market prices. Same number you see in "Total Net Wealth" at the top.</dd>
+
+    <dt>Lifetime P/L</dt>
+    <dd><code>Current value + Card spending − Net capital in TR − Investment income</code>.
+        Pure price appreciation on the capital you've committed. Excludes both lifestyle spending and
+        dividend / interest receipts (those are returns ON capital, not capital itself).</dd>
+
+    <dt>Investment income</dt>
+    <dd>Dividends from stocks / ETFs, plus interest TR paid you on your cash balance.
+        Not counted in P/L because it's income, not appreciation.</dd>
+
+    <dt>Top Paying Issuers</dt>
+    <dd>Ranked list of which companies / ETFs paid you the most in dividends over your account's history.
+        Useful for seeing where your dividend income concentrates (e.g. "Microsoft = 12.6% of all dividends").</dd>
+
+    <dt>Payment Ledger</dt>
+    <dd>Searchable list of every individual dividend and interest payment, with date, issuer, ISIN, type,
+        and amount. Same data TR shows under each dividend event in their app.</dd>
+
+    <dt>ISIN</dt>
+    <dd>International Securities Identification Number. Globally unique ID for a stock, ETF, bond, etc.
+        Two country letters + 10 digits/letters. Use it to look up the same instrument on Yahoo Finance,
+        Stock Analysis, etc — the [TR] [Y!] [SA] pills next to each row link to these.</dd>
+
+    <dt>Net traded</dt>
+    <dd><code>Total stock purchases − Total stock sales</code>. The money parked in positions
+        (bought but not sold yet). Different from "Net capital in TR" — that's about money flow with your bank;
+        this is about activity inside the broker.</dd>
+
+    <dt>Asset Allocation</dt>
+    <dd>How your wealth is split across asset classes. Diversification metric: an all-stocks portfolio is
+        more volatile than a stocks-and-bonds mix.</dd>
+
+    <dt>Concentration warnings</dt>
+    <dd>Heuristic alerts on the Portfolio page: "Top-1 position is X% of depot", "Top-5 are X%", etc.
+        Helps you notice when one stock or one asset class dominates.</dd>
+
+    <dt>Session keepalive</dt>
+    <dd>Background process that refreshes your TR session every ~290 seconds so the cookies don't expire.
+        TR sessions die after 5–15 min idle otherwise.</dd>
+
+    <dt>MFA / Security code</dt>
+    <dd>4-digit code TR pushes to your mobile app when a fresh login is needed. The dashboard's
+        "Update Now" triggers this flow automatically when both the session and the refresh token died.</dd>
+  </dl>
+</div>
+
+<script>
+// Populate the cockpit from the latest portfolio snapshot.
+const fmtEUR = (n) => '€' + (n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtPct = (n) => (n >= 0 ? '+' : '') + (n || 0).toFixed(2) + '%';
+
+async function loadCockpit() {
+  try {
+    const r = await fetch('../DATA/portfolio.json?t=' + Date.now());
+    if (!r.ok) return;
+    const data = await r.json();
+    const s = data.summary;
+    document.getElementById('ck-total').textContent = fmtEUR(s.total_netvalue);
+    document.getElementById('ck-total-sub').textContent =
+      'Depot ' + fmtEUR(s.depot_netvalue) + ' + Cash ' + fmtEUR(s.cash_eur) +
+      ' · ' + data.positions_with_value + ' positions';
+    document.getElementById('ck-cost').textContent = fmtEUR(s.depot_buycost);
+    document.getElementById('ck-pl').textContent = fmtEUR(s.depot_pl_eur);
+    document.getElementById('ck-pl-pct').textContent = fmtPct(s.depot_pl_pct);
+    document.getElementById('ck-cash').textContent = fmtEUR(s.cash_eur);
+
+    const labels = {
+      stocksAndETFs: { name: 'Brokerage (Stocks/ETFs)', icon: '📈', color: 'asset-equity' },
+      bonds: { name: 'Bonds', icon: '🏛', color: 'asset-bonds' },
+      privateMarkets: { name: 'Private Equity', icon: '🔒', color: 'asset-pe' },
+      cryptos: { name: 'Crypto', icon: '🪙', color: 'asset-crypto' },
+      others: { name: 'Others', icon: '·', color: 'asset-cash' },
+    };
+    const by = s.by_category || {};
+    const pills = [];
+    for (const key of ['stocksAndETFs', 'bonds', 'privateMarkets', 'cryptos', 'others']) {
+      const b = by[key];
+      if (!b || !b.count) continue;
+      const m = labels[key];
+      pills.push(`<div class="b-pill">
+        <div class="b-label">${m.icon} ${m.name}</div>
+        <div class="b-value ${m.color}">${fmtEUR(b.net_value_eur)}</div>
+        <div class="b-sub">${b.count} pos · ${fmtPct(b.pl_pct)}</div>
+      </div>`);
+    }
+    pills.push(`<div class="b-pill">
+      <div class="b-label">💶 Cash</div>
+      <div class="b-value asset-cash">${fmtEUR(s.cash_eur)}</div>
+      <div class="b-sub">to invest / withdraw</div>
+    </div>`);
+    document.getElementById('ck-buckets').innerHTML = pills.join('');
+  } catch (e) { /* portfolio.json not yet generated — leave placeholder zeros */ }
+}
+loadCockpit();
+</script>
+</body>
+</html>

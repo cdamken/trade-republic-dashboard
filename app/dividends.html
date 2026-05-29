@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<title>TR Dividends & Interest</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+:root {
+  --bg: #0f1419;
+  --card: #1a1f2e;
+  --border: #2a3142;
+  --text: #e8eef5;
+  --muted: #7a8599;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+  --purple: #c084fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5;
+}
+
+/* ---------- Shared shell (same as analytics.html) ---------- */
+.top-bar { display: flex; align-items: center; gap: 16px; justify-content: space-between;
+  padding: 14px 24px 10px; margin: -24px -24px 0; }
+.top-bar .brand { display: flex; align-items: center; gap: 10px; }
+.top-bar h1 { font-size: 18px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; }
+.top-bar .logo-box { background: #fff; width: 28px; height: 28px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.top-bar nav { display: flex; gap: 4px; flex: 1; justify-content: center; }
+.top-bar nav a { color: var(--muted); text-decoration: none; font-size: 13px;
+  padding: 8px 16px; border-radius: 8px; font-weight: 500;
+  border: 1px solid transparent; cursor: pointer; }
+.top-bar nav a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.top-bar nav a.active { color: var(--blue); background: rgba(96,165,250,0.08); border-color: var(--blue); }
+.top-bar .actions { display: flex; gap: 8px; align-items: center; }
+.top-bar .actions button { background: var(--blue); color: var(--bg); border: none;
+  padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.top-bar .actions button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.cockpit { position: sticky; top: 0; z-index: 50;
+  background: rgba(15,20,25,0.95); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border); padding: 14px 24px 12px; margin: 0 -24px 24px; }
+.cockpit-row { display: grid; gap: 18px; align-items: center; }
+.cockpit-row.kpis    { grid-template-columns: 2fr 1fr 1fr 1fr; margin-bottom: 10px; }
+.cockpit-row.buckets { grid-template-columns: repeat(5, 1fr); gap: 8px; }
+.cockpit .ck-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
+.cockpit .ck-value { font-size: 26px; font-weight: 800; margin-top: 2px; }
+.cockpit .ck-sub { color: var(--muted); font-size: 12px; margin-top: 1px; }
+.cockpit .ck-value.big { font-size: 32px; }
+.cockpit .b-pill { background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; }
+.cockpit .b-pill .b-label { font-size: 10px; color: var(--muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px; }
+.cockpit .b-pill .b-value { font-size: 16px; font-weight: 700; margin-top: 2px; }
+.cockpit .b-pill .b-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.asset-equity { color: #60a5fa; } .asset-bonds  { color: #d4a574; }
+.asset-pe     { color: #a78bfa; } .asset-crypto { color: #fb923c; }
+.asset-cash   { color: #94a3b8; }
+@media (max-width: 1000px) {
+  .cockpit-row.kpis    { grid-template-columns: 1fr 1fr; }
+  .cockpit-row.buckets { grid-template-columns: repeat(2, 1fr); }
+  .top-bar nav { flex: none; }
+}
+
+/* ---------- Page-specific: GBM-style cards + ledger ---------- */
+.page-title { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.page-title h2 { font-size: 22px; font-weight: 700; }
+.page-title .meta { color: var(--muted); font-size: 13px; }
+
+/* Summary cards row (GBM design) */
+.summary-cards {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px; margin: 16px 0 24px;
+}
+.summary-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px;
+}
+.summary-card .label {
+  color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: 8px;
+}
+.summary-card .value { font-size: 26px; font-weight: 700; }
+.summary-card .delta { font-size: 12px; margin-top: 4px; color: var(--muted); }
+.green { color: var(--green); }
+.red   { color: var(--red); }
+.amber { color: var(--amber); }
+.blue  { color: var(--blue); }
+.purple{ color: var(--purple); }
+.muted { color: var(--muted); }
+
+/* Section heading */
+.section {
+  margin: 28px 0 14px; font-size: 17px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+.badge {
+  background: var(--border); color: var(--muted); font-size: 12px;
+  padding: 3px 10px; border-radius: 12px; font-weight: 500;
+}
+
+/* Chart card (Monthly evolution) */
+.chart-card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px 24px; margin-bottom: 24px;
+}
+.chart-card-header { display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px; flex-wrap: wrap; }
+.chart-card-header h3 { font-size: 14px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 1px; font-weight: 600; flex: 1; }
+.range-pills { display: flex; gap: 4px; flex-wrap: wrap; }
+.range-pills button {
+  background: transparent; color: var(--muted);
+  border: 1px solid var(--border); border-radius: 999px;
+  padding: 4px 12px; font-size: 11px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.range-pills button:hover { color: var(--text); border-color: var(--blue); }
+.range-pills button.active {
+  background: var(--blue); color: var(--bg); border-color: var(--blue);
+}
+.chart-container { height: 280px; position: relative; }
+
+/* Filters row (GBM style) */
+.controls {
+  display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap;
+}
+.controls input, .controls select {
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text); padding: 10px 14px; border-radius: 8px; font-size: 14px;
+}
+.controls input { min-width: 220px; flex: 1 1 240px; }
+
+/* Table */
+table {
+  width: 100%; border-collapse: collapse; background: var(--card);
+  border-radius: 12px; overflow: hidden; margin-bottom: 12px;
+}
+th, td {
+  text-align: left; padding: 12px 14px; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  background: rgba(255,255,255,0.03); color: var(--muted);
+  font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap;
+}
+th:hover { color: var(--text); }
+tr:hover { background: rgba(255,255,255,0.02); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ticker { font-family: monospace; font-weight: 600; }
+.tx-isin { font-family: monospace; color: var(--muted); font-size: 11px; }
+
+/* Kind pills (Dividend / Interest) */
+.kind-pill {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 700;
+}
+.kind-dividend { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.kind-interest { background: rgba(192, 132, 252, 0.15); color: var(--purple); }
+.kind-other    { background: rgba(251, 191, 36, 0.15); color: var(--amber); }
+
+.empty {
+  text-align: center; padding: 40px; color: var(--muted); font-size: 14px;
+}
+.note {
+  background: rgba(96, 165, 250, 0.08); border-left: 3px solid var(--blue);
+  padding: 12px 16px; border-radius: 4px; color: var(--muted);
+  font-size: 12px; line-height: 1.6; margin: 24px 0;
+}
+.note strong { color: var(--text); }
+
+.disclaimer {
+  margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; line-height: 1.6;
+}
+.disclaimer a { color: var(--blue); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<!-- Unified top-bar -->
+<div class="top-bar">
+  <div class="brand">
+    <div class="logo-box">📈</div>
+    <h1>Trade Republic</h1>
+  </div>
+  <nav>
+    <a href="index.html">Portfolio</a>
+    <a href="analytics.html">Analytics</a>
+    <a href="dividends.html" class="active">💰 Dividends</a>
+    <a href="settings.html">⚙ Settings</a>
+    <a href="glossary.html">📖 Glossary</a>
+  </nav>
+  <div class="actions">
+    <button class="ghost" onclick="location.href='index.html#docs'">📄 Documents</button>
+    <button onclick="location.href='index.html#update'">🔄 Update Now</button>
+  </div>
+</div>
+
+<!-- Sticky cockpit -->
+<div class="cockpit">
+  <div class="cockpit-row kpis">
+    <div><div class="ck-label">Total Net Wealth</div><div class="ck-value big" id="ck-total">€0.00</div><div class="ck-sub" id="ck-total-sub">—</div></div>
+    <div><div class="ck-label">Investment Cost</div><div class="ck-value" id="ck-cost">€0.00</div><div class="ck-sub">Sum of all buys</div></div>
+    <div><div class="ck-label">Total P/L</div><div class="ck-value" id="ck-pl">€0.00</div><div class="ck-sub" id="ck-pl-pct">0.00%</div></div>
+    <div><div class="ck-label">Available Cash</div><div class="ck-value asset-cash" id="ck-cash">€0.00</div><div class="ck-sub">To be reinvested</div></div>
+  </div>
+  <div class="cockpit-row buckets" id="ck-buckets"></div>
+</div>
+
+<!-- Page title -->
+<div class="page-title">
+  <h2>💰 Dividends & Interest</h2>
+  <span class="meta" id="range-label">Loading…</span>
+</div>
+
+<!-- 4 summary cards (GBM design) -->
+<div class="summary-cards">
+  <div class="summary-card">
+    <div class="label">Total received (all-time)</div>
+    <div class="value green" id="card-total-net">—</div>
+    <div class="delta" id="card-total-detail">—</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Dividends only</div>
+    <div class="value" id="card-divs">—</div>
+    <div class="delta" id="card-divs-detail">— payments</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Interest (Tagesgeld+)</div>
+    <div class="value purple" id="card-int">—</div>
+    <div class="delta" id="card-int-detail">— payments</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Paying issuers</div>
+    <div class="value" id="card-issuers">—</div>
+    <div class="delta" id="card-issuers-detail">unique ISINs</div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>About tax retention:</strong> Trade Republic does not expose
+  Kapitalertragsteuer / Solidaritätszuschlag per individual payment in the
+  API. The amounts shown here are <strong>gross of German withholding</strong>.
+  For the actual tax retained, see your annual
+  <em>Steuerbescheinigung</em> (📄 Documents → year → tax_statement).
+</div>
+
+<!-- Monthly evolution chart -->
+<div class="chart-card">
+  <div class="chart-card-header">
+    <h3>Monthly evolution</h3>
+    <div class="range-pills" id="range-pills">
+      <button data-range="3">3M</button>
+      <button data-range="6">6M</button>
+      <button data-range="9">9M</button>
+      <button data-range="12" class="active">12M</button>
+      <button data-range="all">All</button>
+    </div>
+  </div>
+  <div class="chart-container"><canvas id="monthlyChart"></canvas></div>
+</div>
+
+<!-- Detail ledger -->
+<div class="section">
+  <span>Payment ledger</span>
+  <span class="badge" id="rows-count">—</span>
+</div>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="Search issuer / ISIN…" oninput="renderTable()">
+  <select id="kind-filter" onchange="renderTable()">
+    <option value="">All movements</option>
+    <option value="Dividend">Dividends only</option>
+    <option value="Interest">Interest only</option>
+  </select>
+  <select id="month-filter" onchange="renderTable()">
+    <option value="">All months</option>
+  </select>
+  <select id="issuer-filter" onchange="renderTable()">
+    <option value="">All issuers</option>
+  </select>
+</div>
+
+<table id="payments-table">
+  <thead>
+    <tr>
+      <th onclick="setSort('date')">Date</th>
+      <th onclick="setSort('name')">Issuer</th>
+      <th>ISIN</th>
+      <th>Type</th>
+      <th class="num" onclick="setSort('amount')">Amount</th>
+    </tr>
+  </thead>
+  <tbody id="payments-tbody"></tbody>
+</table>
+
+<div class="disclaimer">
+  Dashboard for personal use · datos vía
+  <a href="https://github.com/cdamken/tr-api" target="_blank">tr-api</a>.
+  Esta página muestra todos los pagos clasificados como dividendos o intereses
+  por Trade Republic en tu portafolio. La tabla incluye 100% de pagos
+  recibidos desde que abriste la cuenta.
+</div>
+
+<script>
+// ============ Data + state ============
+let state = {
+  rows: [],
+  fromDate: null, toDate: null,
+  sortKey: 'date', sortDir: 'desc',
+  rangeMonths: 12,  // for chart
+};
+
+// ============ Money / date formatters ============
+const fmtEur = (n, opts) => {
+  const sign = n < 0 ? '−' : '';
+  const abs = Math.abs(n);
+  return sign + '€' + abs.toLocaleString('en-US', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  });
+};
+const monthKey = (isoDate) => isoDate ? isoDate.slice(0, 7) : '';
+const monthLabel = (key) => {
+  if (!key) return '';
+  const [y, m] = key.split('-');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[+m - 1]} ${y}`;
+};
+const formatDate = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { year:'numeric', month:'short', day:'numeric' });
+};
+
+// ============ Load + populate ============
+async function load() {
+  await Promise.all([loadCockpit(), loadDividends()]);
+}
+
+async function loadCockpit() {
+  // Same cockpit JS as analytics.html — read-only from portfolio.json
+  const fmtE = (n) => '€' + (n||0).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const fmtP = (n) => (n>=0?'+':'') + (n||0).toFixed(2) + '%';
+  try {
+    const r = await fetch('../DATA/portfolio.json?t=' + Date.now());
+    if (!r.ok) return;
+    const d = await r.json();
+    const s = d.summary;
+    document.getElementById('ck-total').textContent = fmtE(s.total_netvalue);
+    document.getElementById('ck-total-sub').textContent =
+      `Depot ${fmtE(s.depot_netvalue)} + Cash ${fmtE(s.cash_eur)} · ${d.positions_with_value} positions`;
+    document.getElementById('ck-cost').textContent = fmtE(s.depot_buycost);
+    document.getElementById('ck-pl').textContent = fmtE(s.depot_pl_eur);
+    document.getElementById('ck-pl-pct').textContent = fmtP(s.depot_pl_pct);
+    document.getElementById('ck-cash').textContent = fmtE(s.cash_eur);
+    const labels = { stocksAndETFs:['📈 Brokerage (Stocks/ETFs)','asset-equity'],
+      bonds:['🏛 Bonds','asset-bonds'], privateMarkets:['🔒 Private Equity','asset-pe'],
+      cryptos:['🪙 Crypto','asset-crypto'], others:['· Others','asset-cash'] };
+    const by = s.by_category || {};
+    const pills = [];
+    for (const k of ['stocksAndETFs','bonds','privateMarkets','cryptos','others']) {
+      const b = by[k]; if (!b || !b.count) continue;
+      const [name, color] = labels[k];
+      pills.push(`<div class="b-pill"><div class="b-label">${name}</div>` +
+        `<div class="b-value ${color}">${fmtE(b.net_value_eur)}</div>` +
+        `<div class="b-sub">${b.count} pos · ${fmtP(b.pl_pct)}</div></div>`);
+    }
+    pills.push(`<div class="b-pill"><div class="b-label">💶 Cash</div>` +
+      `<div class="b-value asset-cash">${fmtE(s.cash_eur)}</div>` +
+      `<div class="b-sub">to invest / withdraw</div></div>`);
+    document.getElementById('ck-buckets').innerHTML = pills.join('');
+  } catch (_) {}
+}
+
+async function loadDividends() {
+  try {
+    const r = await fetch('../DATA/analytics.json?t=' + Date.now());
+    if (!r.ok) {
+      document.getElementById('range-label').textContent = 'No analytics data yet — run Update Now.';
+      return;
+    }
+    const d = await r.json();
+    const div = d.dividends || {};
+    state.rows = div.all_payments || div.recent || [];
+    // Date range — first/last from rows
+    const dates = state.rows.map(p => p.date).filter(Boolean).sort();
+    state.fromDate = dates[0] || null;
+    state.toDate   = dates[dates.length - 1] || null;
+    const rangeMeta = state.fromDate
+      ? `${formatDate(state.fromDate)} → ${formatDate(state.toDate)}`
+      : 'No payments recorded';
+    document.getElementById('range-label').textContent = rangeMeta;
+
+    populateFilters();
+    renderCards();
+    renderChart();
+    renderTable();
+    wireRangePills();
+  } catch (err) {
+    document.getElementById('range-label').textContent = 'Error loading: ' + err.message;
+  }
+}
+
+// ============ Filters ============
+function populateFilters() {
+  const months = [...new Set(state.rows.map(p => monthKey(p.date)))].filter(Boolean).sort().reverse();
+  const monthSel = document.getElementById('month-filter');
+  for (const m of months) {
+    const opt = document.createElement('option');
+    opt.value = m; opt.textContent = monthLabel(m);
+    monthSel.appendChild(opt);
+  }
+  // Issuer = name (TR doesn't have ticker, just ISIN + name).
+  const issuers = [...new Set(state.rows.map(p => p.name).filter(Boolean))].sort();
+  const issuerSel = document.getElementById('issuer-filter');
+  for (const name of issuers) {
+    const opt = document.createElement('option');
+    opt.value = name; opt.textContent = name;
+    issuerSel.appendChild(opt);
+  }
+}
+
+// ============ Summary cards ============
+function renderCards() {
+  const divs = state.rows.filter(p => p.type === 'Dividend');
+  const ints = state.rows.filter(p => p.type === 'Interest');
+  const divSum = divs.reduce((s, p) => s + (p.amount || 0), 0);
+  const intSum = ints.reduce((s, p) => s + (p.amount || 0), 0);
+  const total = divSum + intSum;
+  const issuers = new Set(divs.map(p => p.isin).filter(Boolean)).size;
+
+  document.getElementById('card-total-net').textContent = fmtEur(total);
+  document.getElementById('card-total-detail').textContent =
+    `${state.rows.length} payment(s) · ${divs.length} div + ${ints.length} int`;
+  document.getElementById('card-divs').textContent = fmtEur(divSum);
+  document.getElementById('card-divs-detail').textContent = `${divs.length} payments`;
+  document.getElementById('card-int').textContent = fmtEur(intSum);
+  document.getElementById('card-int-detail').textContent = `${ints.length} payments`;
+  document.getElementById('card-issuers').textContent = issuers;
+  document.getElementById('card-issuers-detail').textContent = 'unique ISINs paying dividends';
+}
+
+// ============ Monthly chart ============
+let monthlyChartRef = null;
+function renderChart() {
+  // Aggregate by month, split Dividend vs Interest
+  const buckets = {};  // { '2026-05': { Dividend: 0, Interest: 0 } }
+  for (const p of state.rows) {
+    const m = monthKey(p.date); if (!m) continue;
+    if (!buckets[m]) buckets[m] = { Dividend: 0, Interest: 0 };
+    if (p.type === 'Dividend' || p.type === 'Interest') {
+      buckets[m][p.type] += p.amount || 0;
+    }
+  }
+  let months = Object.keys(buckets).sort();
+  // Apply range filter
+  if (state.rangeMonths !== 'all') {
+    months = months.slice(-state.rangeMonths);
+  }
+  const divSeries = months.map(m => buckets[m].Dividend);
+  const intSeries = months.map(m => buckets[m].Interest);
+
+  const ctx = document.getElementById('monthlyChart');
+  if (monthlyChartRef) monthlyChartRef.destroy();
+  monthlyChartRef = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: months.map(monthLabel),
+      datasets: [
+        { label: 'Dividends', data: divSeries, backgroundColor: 'rgba(74,222,128,0.7)', borderRadius: 6 },
+        { label: 'Interest',  data: intSeries, backgroundColor: 'rgba(192,132,252,0.7)', borderRadius: 6 },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#e8eef5', font: { size: 12 } } },
+        tooltip: {
+          backgroundColor: 'rgba(15,20,25,0.95)', titleColor: '#e8eef5',
+          bodyColor: '#e8eef5', borderColor: 'rgba(255,255,255,0.08)',
+          borderWidth: 1, cornerRadius: 8, padding: 12,
+          callbacks: { label: (ctx) => `${ctx.dataset.label}: €${ctx.parsed.y.toFixed(2)}` },
+        },
+      },
+      scales: {
+        x: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#7a8599' } },
+        y: { stacked: true, grid: { color: 'rgba(255,255,255,0.04)' },
+             ticks: { color: '#7a8599', callback: v => '€' + v.toFixed(0) } },
+      },
+    },
+  });
+}
+
+function wireRangePills() {
+  document.querySelectorAll('#range-pills button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#range-pills button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const r = btn.dataset.range;
+      state.rangeMonths = r === 'all' ? 'all' : parseInt(r, 10);
+      renderChart();
+    });
+  });
+}
+
+// ============ Sort + table ============
+function setSort(key) {
+  if (state.sortKey === key) state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+  else { state.sortKey = key; state.sortDir = 'desc'; }
+  renderTable();
+}
+
+function kindPill(p) {
+  if (p.type === 'Dividend') return '<span class="kind-pill kind-dividend">Dividend</span>';
+  if (p.type === 'Interest') return '<span class="kind-pill kind-interest">Interest</span>';
+  return '<span class="kind-pill kind-other">Other</span>';
+}
+
+function renderTable() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const kindFilter = document.getElementById('kind-filter').value;
+  const monthFilter = document.getElementById('month-filter').value;
+  const issuerFilter = document.getElementById('issuer-filter').value;
+
+  let rows = state.rows.filter(p => {
+    const blob = ((p.name || '') + ' ' + (p.isin || '')).toLowerCase();
+    if (search && !blob.includes(search)) return false;
+    if (kindFilter && p.type !== kindFilter) return false;
+    if (monthFilter && monthKey(p.date) !== monthFilter) return false;
+    if (issuerFilter && p.name !== issuerFilter) return false;
+    return true;
+  });
+
+  rows.sort((a, b) => {
+    const va = a[state.sortKey];
+    const vb = b[state.sortKey];
+    if (typeof va === 'string' && typeof vb === 'string') {
+      return state.sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+    return state.sortDir === 'asc' ? ((va || 0) - (vb || 0)) : ((vb || 0) - (va || 0));
+  });
+
+  document.getElementById('rows-count').textContent = `${rows.length} / ${state.rows.length}`;
+  document.getElementById('payments-tbody').innerHTML = rows.length
+    ? rows.map(p => `<tr>
+        <td>${formatDate(p.date)}</td>
+        <td class="ticker">${p.name || '—'}</td>
+        <td class="tx-isin">${p.isin || '—'}</td>
+        <td>${kindPill(p)}</td>
+        <td class="num">${fmtEur(p.amount || 0)}</td>
+      </tr>`).join('')
+    : '<tr><td colspan="5" class="empty">No payments match the current filters</td></tr>';
+}
+
+load();
+</script>
+</body>
+</html>

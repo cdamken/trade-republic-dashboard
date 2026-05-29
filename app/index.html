@@ -146,7 +146,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .pm-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
 .pm-value { font-size: 18px; margin-top: 4px; font-variant-numeric: tabular-nums; }
 .pm-meta { color: var(--muted); font-size: 13px; margin: 12px 0; }
-.pm-meta code { color: var(--muted); font-size: 11px; }
+.pm-meta code { color: var(--muted); font-size: 13px; }
 .pm-tip { color: var(--muted); font-size: 12px; line-height: 1.5; margin-top: 12px;
   padding: 10px 12px; background: var(--bg); border-radius: 6px; border-left: 2px solid var(--border); }
 .pm-tip code { background: rgba(255,255,255,0.05); padding: 1px 4px; border-radius: 3px; font-size: 11px; }
@@ -401,6 +401,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
   <nav>
     <a href="index.html" class="active">Portfolio</a>
     <a href="analytics.html">Analytics</a>
+    <a href="dividends.html">💰 Dividends</a>
     <a href="settings.html">⚙ Settings</a>
     <a href="glossary.html">📖 Glossary</a>
   </nav>
@@ -1314,7 +1315,7 @@ function rowHTML(p) {
   const safeName = String(p.name || '').replace(/['"]/g, '');
   return `<tr>
     <td title="${p.name}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${p.name}</a></td>
-    <td><code style="font-size:11px;color:var(--muted)">${p.isin}</code>${externalLinks(p.isin)}</td>
+    <td><code style="font-size:13px;color:var(--muted)">${p.isin}</code>${externalLinks(p.isin)}</td>
     <td class="num">${fmt(p.quantity, 4)}</td>
     <td class="num">${fmtEUR(p.avg_cost)}</td>
     <td class="num">${fmtEUR(p.current_price)}</td>
@@ -1330,7 +1331,7 @@ function shortRow(p) {
   const safeName = String(p.name || '').replace(/['"]/g, '');
   return `<tr>
     <td title="${p.name}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${p.name}</a></td>
-    <td><code style="font-size:11px;color:var(--muted)">${p.isin}</code>${externalLinks(p.isin)}</td>
+    <td><code style="font-size:13px;color:var(--muted)">${p.isin}</code>${externalLinks(p.isin)}</td>
     <td class="num">${fmt(p.quantity, 4)}</td>
     <td class="num"><strong>${fmtEUR(p.net_value_eur)}</strong></td>
     <td class="num">${fmtEUR(p.pl_eur)}</td>

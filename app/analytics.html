@@ -260,43 +260,9 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
   </div>
 </div>
 
-<!-- Top / Bottom contributors — what's driving the total P/L. -->
-<div class="cf-card" style="margin-top: 24px;">
-  <h2>Top contributors to P/L</h2>
-  <p style="color: var(--muted); font-size: 12px; margin-bottom: 16px;">
-    The 5 positions with the largest positive P/L and the 5 with the largest negative P/L.
-  </p>
-  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-    <div>
-      <h3 style="font-size: 13px; color: var(--green); text-transform: uppercase;
-                 letter-spacing: 1px; font-weight: 600; margin-bottom: 8px;">
-        🏆 Top winners
-      </h3>
-      <table id="contributors-top" style="font-size: 13px; width: 100%;">
-        <thead><tr style="color: var(--muted); font-size: 11px; text-transform: uppercase;">
-          <th style="text-align: left;">Asset</th>
-          <th class="num">P/L €</th>
-          <th class="num">P/L %</th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-    <div>
-      <h3 style="font-size: 13px; color: var(--red); text-transform: uppercase;
-                 letter-spacing: 1px; font-weight: 600; margin-bottom: 8px;">
-        💔 Top losers
-      </h3>
-      <table id="contributors-bottom" style="font-size: 13px; width: 100%;">
-        <thead><tr style="color: var(--muted); font-size: 11px; text-transform: uppercase;">
-          <th style="text-align: left;">Asset</th>
-          <th class="num">P/L €</th>
-          <th class="num">P/L %</th>
-        </tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-</div>
+<!-- Top contributors table removed 2026-06-01 — Portfolio tab already
+     shows Top Winners + Top Losers prominently. Pure duplication. -->
+
 
 <div class="grid-top">
   <!-- 1. Assets Allocation -->
@@ -439,7 +405,7 @@ async function init() {
   document.getElementById('cf-buys-count').textContent = (cf.buys?.count || 0).toLocaleString();
   document.getElementById('cf-sells').textContent = fmtEur0(cf.sells?.total || 0);
   document.getElementById('cf-sells-count').textContent = (cf.sells?.count || 0).toLocaleString();
-  renderContributors(data.contributors || {});
+  // Top/bottom contributors table removed — Portfolio tab covers it.
 
   const monthly = cf.monthly || [];
   if (monthly.length > 0) {
@@ -562,7 +528,9 @@ async function init() {
     const minV = Math.min(...values);
     const maxV = Math.max(...values);
     const padding = (maxV - minV) * 0.1 || 100;
-    const yMin = Math.max(0, Math.floor((minV - padding) / 1000) * 1000);
+    // Let yMin go negative — losses (months where withdrawals + card spending
+    // exceeded deposits) need to be visible, not silently clamped to 0.
+    const yMin = Math.floor((minV - padding) / 1000) * 1000;
     const yMax = Math.ceil((maxV + padding) / 1000) * 1000;
 
     // Benchmark overlay (MSCI World, IWDA.AS), if backend fetched it.
@@ -658,33 +626,8 @@ async function init() {
   // wireDividendFilters and the _divLedgerState helper were removed with them.
 }
 
-// ============ Top / bottom contributors (2026-06-01) ============
-function renderContributors(c) {
-  const fmtRow = (p) => {
-    const pl = p.pl_eur || 0;
-    const cls = pl >= 0 ? 'pl-pos' : 'pl-neg';
-    const eSign = pl >= 0 ? '+' : '−';
-    const ePct  = (p.pl_pct >= 0 ? '+' : '') + (p.pl_pct || 0).toFixed(1) + '%';
-    const name = (p.name || '—');
-    return '<tr><td title="' + name + '" style="max-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + name + '</td>' +
-           '<td class="num ' + cls + '">' + eSign + '€' + Math.abs(pl).toLocaleString(undefined, {maximumFractionDigits: 0}) + '</td>' +
-           '<td class="num ' + cls + '">' + ePct + '</td></tr>';
-  };
-  const top = (c.top || []).slice(0, 5);
-  const bot = (c.bottom || []).filter(p => (p.pl_eur || 0) < 0).slice(0, 5);
-  const topTbody = document.querySelector('#contributors-top tbody');
-  const botTbody = document.querySelector('#contributors-bottom tbody');
-  if (topTbody) {
-    topTbody.innerHTML = top.length
-      ? top.map(fmtRow).join('')
-      : '<tr><td colspan="3" style="text-align:center; color:var(--muted); padding:16px;">No data yet</td></tr>';
-  }
-  if (botTbody) {
-    botTbody.innerHTML = bot.length
-      ? bot.map(fmtRow).join('')
-      : '<tr><td colspan="3" style="text-align:center; color:var(--muted); padding:16px;">No losers — every position is up 🎉</td></tr>';
-  }
-}
+// renderContributors removed 2026-06-01 — Portfolio tab already has
+// Top Winners + Top Losers. Avoid duplication.
 
 init();
 </script>

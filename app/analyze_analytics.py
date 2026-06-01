@@ -275,6 +275,7 @@ def process_analytics():
     # =========================================================================
     monthly_flow = defaultdict(lambda: {
         "deposits": 0.0, "removals": 0.0, "withdrawals": 0.0, "tax_refunds": 0.0,
+        "buys": 0.0, "sells": 0.0,
     })
 
     if csv_path.exists():
@@ -311,9 +312,11 @@ def process_analytics():
                 elif t_type == "Buy":
                     cf["buys"]["count"] += 1
                     cf["buys"]["total"] += abs_val
+                    if month: monthly_flow[month]["buys"] += abs_val
                 elif t_type == "Sell":
                     cf["sells"]["count"] += 1
                     cf["sells"]["total"] += abs_val
+                    if month: monthly_flow[month]["sells"] += abs_val
 
                 # Dividends section (chart + full history + by-issuer breakdown).
                 # Independent of cash_flow.
@@ -368,17 +371,22 @@ def process_analytics():
     cf["net_traded"] = cf["buys"]["total"] - cf["sells"]["total"]
     for m in sorted(monthly_flow.keys()):
         d = monthly_flow[m]
-        # Monthly net flow reflects everything coming in vs. everything
-        # going out (including both withdrawals AND card spending) so the
-        # bar chart shows the full picture per month.
+        # net_flow: full external picture (deposits + refunds − removals − withdrawals)
         net = d["deposits"] + d["tax_refunds"] - d["removals"] - d["withdrawals"]
+        # net_invested: change in committed cost basis = buys − sells.
+        # This is what the Analytics chart line tracks now (2026-06-01) and
+        # what the benchmark replay uses, so apples-to-apples comparison.
+        net_invested = d["buys"] - d["sells"]
         cf["monthly"].append({
             "month": m,
             "deposits": round(d["deposits"], 2),
             "removals": round(d["removals"], 2),
             "withdrawals": round(d["withdrawals"], 2),
             "tax_refunds": round(d["tax_refunds"], 2),
+            "buys": round(d["buys"], 2),
+            "sells": round(d["sells"], 2),
             "net_flow": round(net, 2),
+            "net_invested": round(net_invested, 2),
         })
 
     # =========================================================================
@@ -465,25 +473,19 @@ def process_analytics():
                     "Lifetime P/L can't be computed reliably."
                 )
 
-            # Net worth history — reconstructed from CSV external flows.
+            # Net invested trajectory (2026-06-01 — was external cash flow):
             #
-            # We can't know historical *market value* per day without
-            # historical position prices (TR doesn't expose them via the
-            # API we use). What we CAN compute exactly is the "cost-basis
-            # wealth" trajectory: the sum of external cash flows up to
-            # each day.
+            # Each day's value = cumulative (buys − sells) up to that day.
+            # This is the **cost basis** of all positions you're holding
+            # right now, plus everything you've ever bought and sold. Goes
+            # up when you buy, down when you sell.
             #
-            #   wealth_at_cost(day X) = Σ deposits + tax_refunds
-            #                          + dividends + interest
-            #                          − removals (card spending)
-            #
-            # Buys and sells don't move total wealth — they just shift
-            # between cash and positions — so we don't count them here.
-            #
-            # This line shows the user's capital-injection trajectory.
-            # Today's marker uses the actual market value (total_netvalue),
-            # which is higher than the cost-basis line by the accumulated
-            # portfolio appreciation.
+            # Why this and not "external cash flow" (deposits − removals)?
+            # Carlos uses the TR card heavily, so removals (card spending)
+            # dominate and the cash-flow line gave nonsense numbers (€7k
+            # net inflow when he'd actually committed >€100k to positions
+            # over time). buys − sells is what an investor calls
+            # "committed capital" — same currency as the benchmark replay.
             today = datetime.now().strftime('%Y-%m-%d')
             daily_wealth = {}
             running = 0.0
@@ -500,12 +502,12 @@ def process_analytics():
                             val = float(row.get('Value') or '0')
                         except (TypeError, ValueError):
                             continue
-                        if t_type in ('Deposit', 'Tax Refund', 'Dividend', 'Interest'):
+                        if t_type == 'Buy':
                             running += abs(val)
-                        elif t_type == 'Removal':
+                        elif t_type == 'Sell':
                             running -= abs(val)
-                        # Buy/Sell don't change total wealth (just shift
-                        # between cash and positions), so skip them.
+                        # Skip Deposit/Removal/Withdrawal/Tax/Div/Int —
+                        # those don't change the cost basis of positions.
                         daily_wealth[date] = round(running, 2)
 
             # Build the sorted history list of cost-basis daily values.
@@ -601,10 +603,13 @@ def process_analytics():
             ("VUSA.AS", "S&P 500",     "#34d399"),  # emerald
             ("CNDX.AS", "Nasdaq 100",  "#c084fc"),  # iShares Nasdaq 100 UCITS, EUR
         ]
+        # Replay uses net_invested (buys − sells) so the comparison is
+        # apples-to-apples with the user's line (cumulative buys − sells).
+        replay_input = [{"month": m["month"], "net_flow": m["net_invested"]} for m in cf["monthly"]]
         for sym, label, color in BENCHMARKS:
             cache_path = cache_dir / (sym.replace(".", "_") + ".json")
             bench_history = fetch_benchmark_monthly(sym, start_d, today_d, cache_path=cache_path)
-            replayed = replay_against_benchmark(cf["monthly"], bench_history) if bench_history else []
+            replayed = replay_against_benchmark(replay_input, bench_history) if bench_history else []
             if replayed:
                 benchmarks_out.append({
                     "symbol":  sym,

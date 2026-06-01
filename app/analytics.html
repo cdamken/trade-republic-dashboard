@@ -131,9 +131,14 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
   </nav>
   <div class="actions">
     <button class="ghost" onclick="location.href='index.html#docs'">📄 Documents</button>
-    <button onclick="location.href='index.html#update'">🔄 Update Now</button>
+    <button id="update-btn">🔄 Update Now</button>
   </div>
 </div>
+
+<!-- Shared in-place Update Now flow (injects MFA modal + toast + progress bar,
+     wires #update-btn). Identical handler on every page so the user never has
+     to bounce to Portfolio first. -->
+<script src="_update_flow.js"></script>
 
 <div class="cockpit">
   <div class="cockpit-row kpis">

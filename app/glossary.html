@@ -88,9 +88,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif
   </nav>
   <div class="actions">
     <button class="ghost" onclick="location.href='index.html#docs'">📄 Documents</button>
-    <button onclick="location.href='index.html#update'">🔄 Update Now</button>
+    <button id="update-btn">🔄 Update Now</button>
   </div>
 </div>
+
+<!-- Shared in-place Update Now flow -->
+<script src="_update_flow.js"></script>
 
 <!-- Cockpit (read-only here — values pulled from portfolio.json on load). -->
 <div class="cockpit">

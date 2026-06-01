@@ -388,6 +388,16 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .btn-submit { background: var(--blue); color: var(--bg); }
 .btn-submit:hover:not(:disabled) { background: #7ab3ff; }
 .btn-submit:disabled { opacity: 0.5; cursor: wait; }
+
+/* P/L colour (2026-06-01 — green/red restored). Applied via JS to row
+   cells, cockpit KPI values, and bucket-pill .b-sub percentages. */
+.pl-pos { color: var(--green); }
+.pl-neg { color: var(--red); }
+
+/* ISIN code reset — same colour and size as the row text. Mono font
+   keeps it scannable without making it look "different". */
+td code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+          font-size: inherit; color: inherit; }
 </style>
 </head>
 <body>
@@ -1310,32 +1320,35 @@ function externalLinks(isin) {
 
 function rowHTML(p) {
   // No green/red — sign-only convention. The +/− in fmtPct() / fmtEUR()
-  // already conveys direction. Clicking the name opens the TR mini-chart modal.
+  // P/L coloured green/red (2026-06-01 — restored after Carlos found
+  // sign-only mode too easy to skim past).
   const safeIsin = String(p.isin || '').replace(/['"]/g, '');
   const safeName = String(p.name || '').replace(/['"]/g, '');
+  const plCls = (p.pl_eur || 0) >= 0 ? 'pl-pos' : 'pl-neg';
   return `<tr>
     <td title="${p.name}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${p.name}</a></td>
-    <td><code style="font-size:13px;color:var(--muted)">${p.isin}</code>${externalLinks(p.isin)}</td>
+    <td><code>${p.isin}</code>${externalLinks(p.isin)}</td>
     <td class="num">${fmt(p.quantity, 4)}</td>
     <td class="num">${fmtEUR(p.avg_cost)}</td>
     <td class="num">${fmtEUR(p.current_price)}</td>
     <td class="num">${fmtEUR(p.buy_cost_eur)}</td>
     <td class="num"><strong>${fmtEUR(p.net_value_eur)}</strong></td>
-    <td class="num">${fmtEUR(p.pl_eur)}</td>
-    <td class="num"><strong>${fmtPct(p.pl_pct)}</strong></td>
+    <td class="num ${plCls}">${fmtEUR(p.pl_eur)}</td>
+    <td class="num ${plCls}"><strong>${fmtPct(p.pl_pct)}</strong></td>
   </tr>`;
 }
 
 function shortRow(p) {
   const safeIsin = String(p.isin || '').replace(/['"]/g, '');
   const safeName = String(p.name || '').replace(/['"]/g, '');
+  const plCls = (p.pl_eur || 0) >= 0 ? 'pl-pos' : 'pl-neg';
   return `<tr>
     <td title="${p.name}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${p.name}</a></td>
-    <td><code style="font-size:13px;color:var(--muted)">${p.isin}</code>${externalLinks(p.isin)}</td>
+    <td><code>${p.isin}</code>${externalLinks(p.isin)}</td>
     <td class="num">${fmt(p.quantity, 4)}</td>
     <td class="num"><strong>${fmtEUR(p.net_value_eur)}</strong></td>
-    <td class="num">${fmtEUR(p.pl_eur)}</td>
-    <td class="num"><strong>${fmtPct(p.pl_pct)}</strong></td>
+    <td class="num ${plCls}">${fmtEUR(p.pl_eur)}</td>
+    <td class="num ${plCls}"><strong>${fmtPct(p.pl_pct)}</strong></td>
   </tr>`;
 }
 
@@ -1485,8 +1498,13 @@ function renderCockpit(summary, data) {
     ' + Cash ' + fmtEUR(summary.cash_eur) +
     ' · ' + data.positions_with_value + ' positions';
   document.getElementById('ck-cost').textContent = fmtEUR(summary.depot_buycost);
-  document.getElementById('ck-pl').textContent = fmtEUR(summary.depot_pl_eur);
-  document.getElementById('ck-pl-pct').textContent = fmtPct(summary.depot_pl_pct);
+  const plEl = document.getElementById('ck-pl');
+  const plPctEl = document.getElementById('ck-pl-pct');
+  plEl.textContent = fmtEUR(summary.depot_pl_eur);
+  plPctEl.textContent = fmtPct(summary.depot_pl_pct);
+  const plCls = (summary.depot_pl_eur || 0) >= 0 ? 'pl-pos' : 'pl-neg';
+  plEl.classList.remove('pl-pos', 'pl-neg'); plEl.classList.add(plCls);
+  plPctEl.classList.remove('pl-pos', 'pl-neg'); plPctEl.classList.add(plCls);
   document.getElementById('ck-cash').textContent = fmtEUR(summary.cash_eur);
 }
 
@@ -1513,11 +1531,12 @@ function renderWealthBuckets(summary) {
     const b = by[key];
     if (!b || !b.count) continue;
     const meta = labels[key] || { name: key, icon: '·', color: '' };
+    const subCls = (b.pl_pct || 0) >= 0 ? 'pl-pos' : 'pl-neg';
     pills.push(`
       <div class="b-pill">
         <div class="b-label">${meta.icon} ${meta.name}</div>
         <div class="b-value ${meta.color}">${fmtEUR(b.net_value_eur)}</div>
-        <div class="b-sub">${b.count} pos · ${fmtPct(b.pl_pct)}</div>
+        <div class="b-sub">${b.count} pos · <span class="${subCls}">${fmtPct(b.pl_pct)}</span></div>
       </div>
     `);
   }

@@ -176,8 +176,13 @@ tr:hover { background: rgba(255,255,255,0.02); }
 
 /* ============ NEW DESIGN (mockup v5): top-bar + sticky cockpit + non-blocking sync ============ */
 
-/* Top bar — logo + tabs + actions. Replaces the old h1 + .nav layout. */
+/* Top bar — logo + tabs + actions. Sticky as of 2026-06-01: it's small,
+   useful to navigate from any scroll position. Cockpit lost sticky in
+   the same commit (too tall, ate the viewport). */
 .top-bar {
+  position: sticky; top: 0; z-index: 60;
+  background: rgba(15, 20, 25, 0.95); backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   display: flex; align-items: center; gap: 16px; justify-content: space-between;
   padding: 14px 0 10px;
   margin: -24px -24px 0;  /* let it reach the page edges; body has padding:24px */
@@ -206,10 +211,10 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .top-bar .actions button.ghost:hover { color: var(--text); border-color: var(--muted); }
 .top-bar .actions button[disabled] { opacity: 0.7; cursor: progress; }
 
-/* Sticky cockpit — 4 KPIs + 5 buckets, visible on every page */
+/* Cockpit — 4 KPIs + 5 buckets. Was sticky until 2026-06-01; now scrolls
+   away with the rest of the page (Carlos: "no es necesario que esté
+   always visible"). Top-bar carries the sticky role. */
 .cockpit {
-  position: sticky; top: 0; z-index: 50;
-  background: rgba(15, 20, 25, 0.95); backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
   padding: 14px 24px 12px;
   margin: 0 -24px 24px;  /* reach to page edges */

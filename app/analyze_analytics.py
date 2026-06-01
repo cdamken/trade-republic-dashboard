@@ -581,27 +581,40 @@ def process_analytics():
             fwd / cf["buys"]["total"] * 100, 2
         )
 
-    # --- Benchmark replay (MSCI World, IWDA.AS in EUR) ----------------------
-    # Skip if there are no monthly flows yet, or the user just set up.
+    # --- Benchmark replays (MSCI World, S&P 500, Nasdaq 100, all EUR) ------
+    # Three UCITS ETFs listed in Amsterdam (EUR-denominated so no FX noise):
+    #   IWDA.AS — iShares Core MSCI World UCITS
+    #   VUSA.AS — Vanguard S&P 500 UCITS
+    #   EQQQ.AS — Invesco EQQQ Nasdaq-100 UCITS
+    # If Yahoo fails for one, the others still render (graceful per-symbol).
+    benchmarks_out = []
     if cf["monthly"]:
-        first_month = cf["monthly"][0]["month"]   # "YYYY-MM"
+        first_month = cf["monthly"][0]["month"]
         try:
             start_d = datetime.fromisoformat(first_month + "-01").date()
         except ValueError:
             start_d = today_d - timedelta(days=365)
         cache_dir = base_dir / "benchmark_cache"
         cache_dir.mkdir(exist_ok=True)
-        bench_cache = cache_dir / "IWDA_AS.json"
-        bench_history = fetch_benchmark_monthly(
-            "IWDA.AS", start_d, today_d, cache_path=bench_cache,
-        )
-        replayed = replay_against_benchmark(cf["monthly"], bench_history) if bench_history else []
-        if replayed:
-            analytics_data["benchmark"] = {
-                "symbol":   "IWDA.AS",
-                "label":    "iShares MSCI World (IWDA, EUR)",
-                "history":  replayed,
-            }
+        BENCHMARKS = [
+            ("IWDA.AS", "MSCI World",  "#fbbf24"),  # amber
+            ("VUSA.AS", "S&P 500",     "#34d399"),  # emerald
+            ("CNDX.AS", "Nasdaq 100",  "#c084fc"),  # iShares Nasdaq 100 UCITS, EUR
+        ]
+        for sym, label, color in BENCHMARKS:
+            cache_path = cache_dir / (sym.replace(".", "_") + ".json")
+            bench_history = fetch_benchmark_monthly(sym, start_d, today_d, cache_path=cache_path)
+            replayed = replay_against_benchmark(cf["monthly"], bench_history) if bench_history else []
+            if replayed:
+                benchmarks_out.append({
+                    "symbol":  sym,
+                    "label":   label,
+                    "color":   color,
+                    "history": replayed,
+                })
+    analytics_data["benchmarks"] = benchmarks_out
+    # Keep legacy 'benchmark' field for backwards compat — JS reads new field.
+    analytics_data["benchmark"] = benchmarks_out[0] if benchmarks_out else None
 
     with open(base_dir / 'analytics.json', 'w') as f:
         json.dump(analytics_data, f, indent=2)

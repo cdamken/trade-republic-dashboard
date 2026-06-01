@@ -38,9 +38,11 @@ def process_analytics():
             # Internal trading totals (raw sums — no chart needed)
             "buys":          {"count": 0, "total": 0.0},
             "sells":         {"count": 0, "total": 0.0},
-            # Per-year breakdown for the "Buys vs Sells by year" chart.
-            # Shape: {"2024": {"buys": X, "sells": Y, "buys_count": N, "sells_count": M}, ...}
-            "buys_sells_by_year": {},
+            # Per-month breakdown for the "Capital invested over time" line
+            # chart. Cumulative (buys − sells) over months = how much
+            # capital you've committed to the market.
+            # Shape: {"2024-01": {"buys": X, "sells": Y}, ...}
+            "buys_sells_by_month": {},
             # Computed
             "net_capital_in":  0.0,  # deposits + tax_refunds − withdrawals
                                      # ("how much of my net worth I dedicated
@@ -111,19 +113,15 @@ def process_analytics():
                 elif t_type == "Buy":
                     cf["buys"]["count"] += 1
                     cf["buys"]["total"] += abs_val
-                    if date_str:
-                        y = cf["buys_sells_by_year"].setdefault(date_str[:4],
-                            {"buys": 0.0, "sells": 0.0, "buys_count": 0, "sells_count": 0})
-                        y["buys"] += abs_val
-                        y["buys_count"] += 1
+                    if month:
+                        m = cf["buys_sells_by_month"].setdefault(month, {"buys": 0.0, "sells": 0.0})
+                        m["buys"] += abs_val
                 elif t_type == "Sell":
                     cf["sells"]["count"] += 1
                     cf["sells"]["total"] += abs_val
-                    if date_str:
-                        y = cf["buys_sells_by_year"].setdefault(date_str[:4],
-                            {"buys": 0.0, "sells": 0.0, "buys_count": 0, "sells_count": 0})
-                        y["sells"] += abs_val
-                        y["sells_count"] += 1
+                    if month:
+                        m = cf["buys_sells_by_month"].setdefault(month, {"buys": 0.0, "sells": 0.0})
+                        m["sells"] += abs_val
 
                 # Dividends section (chart + full history + by-issuer breakdown).
                 # Independent of cash_flow.

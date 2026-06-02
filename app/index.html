@@ -747,6 +747,24 @@ const fmt = (n, d=2) => n.toLocaleString('en-US', { minimumFractionDigits: d, ma
 const fmtEUR = (n) => '€' + fmt(n);
 const fmtPct = (n) => (n >= 0 ? '+' : '') + fmt(n, 1) + '%';
 
+// Quantity formatter that adapts decimal precision to the instrument
+// class. Crypto needs many decimals (you can own 0.029624 ETH); whole-
+// share stocks look cleaner as integers ("12" instead of "12.0000");
+// fractional stocks (savings-plan units) still need up to 4 decimals.
+function fmtQty(n, category) {
+  if (n == null || isNaN(n)) return '—';
+  if (category === 'cryptos') {
+    return n.toLocaleString('en-US', {
+      minimumFractionDigits: 6, maximumFractionDigits: 8,
+    });
+  }
+  const isWhole = (n % 1 === 0);
+  return n.toLocaleString('en-US', {
+    minimumFractionDigits: isWhole ? 0 : 2,
+    maximumFractionDigits: isWhole ? 0 : 4,
+  });
+}
+
 function toggleSection(id) {
   const el = document.getElementById(id);
   const section = el.previousElementSibling;
@@ -1394,7 +1412,7 @@ function rowHTML(p) {
   return `<tr>
     <td title="${p.name}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${p.name}</a></td>
     <td><code>${p.isin}</code>${externalLinks(p.isin)}</td>
-    <td class="num">${fmt(p.quantity, 4)}</td>
+    <td class="num">${fmtQty(p.quantity, p.category)}</td>
     <td class="num">${fmtEUR(p.avg_cost)}</td>
     <td class="num">${fmtEUR(p.current_price)}</td>
     <td class="num">${fmtEUR(p.buy_cost_eur)}</td>
@@ -1411,7 +1429,7 @@ function shortRow(p) {
   return `<tr>
     <td title="${p.name}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${p.name}</a></td>
     <td><code>${p.isin}</code>${externalLinks(p.isin)}</td>
-    <td class="num">${fmt(p.quantity, 4)}</td>
+    <td class="num">${fmtQty(p.quantity, p.category)}</td>
     <td class="num"><strong>${fmtEUR(p.net_value_eur)}</strong></td>
     <td class="num ${plCls}">${fmtEUR(p.pl_eur)}</td>
     <td class="num ${plCls}"><strong>${fmtPct(p.pl_pct)}</strong></td>
@@ -1439,7 +1457,7 @@ function openPositionModal(isin, name) {
     <div class="pm-grid">
       <div class="pm-stat">
         <div class="pm-label">Quantity</div>
-        <div class="pm-value">${fmt(pos.quantity, 4)}</div>
+        <div class="pm-value">${fmtQty(pos.quantity, pos.category)}</div>
       </div>
       <div class="pm-stat">
         <div class="pm-label">Avg cost</div>

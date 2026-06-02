@@ -45,9 +45,11 @@ El orden dentro de cada sección es por impacto estimado.
   (no overlay full-screen como GBM, pero el texto sí cambia).
   Comparación inicial fue imprecisa.
 
-- [ ] **Decimales adaptativos por instrumento** — crypto muestra 6+
-  decimales, equity 2, fondos según haga falta. Hoy todo se formatea
-  igual. GBM lo hace en sus tablas.
+- [x] **Decimales adaptativos por instrumento** — implementado 2026-06-02.
+  Nuevo `fmtQty(qty, category)` en `index.html`: cryptos → 6-8 decimales;
+  whole-share stocks/ETFs → 0 decimales ("12" no "12.0000"); fractional
+  (savings plan units) → 2-4 decimales. Aplicado a las 2 tablas + position
+  modal.
 
 ## 2. Features (puerto desde GBM)
 

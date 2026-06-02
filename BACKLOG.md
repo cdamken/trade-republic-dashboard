@@ -39,10 +39,11 @@ El orden dentro de cada sección es por impacto estimado.
   habría que portar también index.html a `_update_flow.js`. Bajo
   prioridad — el patrón actual funciona. ~1h si se decide hacer.
 
-- [ ] **Rotating progress messages** durante el /update en lugar del
-  toast estático. Patrón de GBM: "Conectando…" → "Descargando portafolio…"
-  → "Descargando posiciones…" → "Ya casi…". Da sensación de progreso real
-  vs spinner sin contexto.
+- [x] **Rotating progress messages** — ya existía. `_update_flow.js`
+  define `STAGES_NORMAL` y `STAGES_FULL` que rotan en un `setInterval`
+  cada 500ms según tiempo transcurrido. Se renderizan dentro del toast
+  (no overlay full-screen como GBM, pero el texto sí cambia).
+  Comparación inicial fue imprecisa.
 
 - [ ] **Decimales adaptativos por instrumento** — crypto muestra 6+
   decimales, equity 2, fondos según haga falta. Hoy todo se formatea
@@ -90,8 +91,12 @@ El orden dentro de cada sección es por impacto estimado.
   caer al modal MFA solo si el refresh falla. Reduciría el MFA de
   "cada N horas" a "cuando expire el refresh token".
 
-- [ ] **Endpoint /reset** — análogo al de GBM para borrar sesión local
-  + DATA manualmente desde el UI (botón en Settings).
+- [x] **Endpoint /reset** — ya existía con UX más estricta que el de
+  GBM. Botón "🗑 Wipe data + credentials" en settings.html requiere
+  doble confirmación (confirm + prompt "delete"). Wipea credenciales,
+  cookies y DATA — fuerza re-setup completo. GBM en cambio solo wipea
+  sesión + DATA (mantiene credenciales). Comportamientos diferentes
+  pero ambos son correctos para su flujo.
 
 ## 4. UX confirmaciones
 

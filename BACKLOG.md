@@ -72,9 +72,15 @@ El orden dentro de cada sección es por impacto estimado.
   existentes (orden: Portfolio → Analytics → Orders → Ledger →
   Dividends → Settings → Glossary).
 
-- [ ] **Cross-validation del total** con un segundo endpoint si TR
-  expone algo equivalente al `investments_groups` de GBM. Da confianza
-  de que el número del dashboard coincide con la app móvil oficial.
+- [x] **Cross-validation del total** — investigado 2026-06-02 leyendo
+  `tr-api/src/tr_api/portfolio.py`. TR **no expone** un endpoint
+  "autoritativo" separado equivalente al `investments_groups` de GBM.
+  El total siempre se computa localmente de `compactPortfolio.positions`
+  (suma de `netSize × currentPrice`) + `cash`. Los topics disponibles
+  son: `compactPortfolio`, `compactPortfolioByType`, `cash`,
+  `availableCashForPayout`. La única "validación" posible es comparar
+  manualmente con la app móvil de TR (misma backend, debería coincidir
+  por construcción). Cerrado — no hay nada para implementar.
 
 - [x] **Segmentación fina de mercado** — implementado 2026-06-02 en
   analytics.html. Nuevo chart horizontal "Geographic allocation

@@ -304,6 +304,15 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
   </div>
 </div>
 
+<!-- Geographic breakdown derived from ISIN country prefix. Complements
+     the by-category allocation above with a "where is my money?" view
+     across the issuer's domicile. -->
+<div class="card" style="margin-bottom: 24px;">
+  <h2>Geographic allocation (ISIN domicile)</h2>
+  <div class="substat" id="geo-substat">By the country prefix in each ISIN — not by what the company actually does or where its revenue comes from.</div>
+  <div class="chart-container" style="height: 320px;"><canvas id="geoChart"></canvas></div>
+</div>
+
 <!-- Dividends + Interest live in their own tab (dividends.html). The
      redundant "Open Dividends" banner that used to live here was
      removed 2026-06-01 — the tab is already in the top nav. -->
@@ -475,6 +484,87 @@ async function init() {
               const total = ctx.dataset.data.reduce((s, v) => s + v, 0);
               const pct = total > 0 ? (ctx.parsed / total * 100) : 0;
               return ' ' + ctx.label + ': €' + ctx.parsed.toLocaleString(undefined, {maximumFractionDigits:0}) + '  (' + pct.toFixed(1) + '%)';
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // 1b. Geographic allocation — derived from ISIN[:2] country codes.
+  // Maps the prefix to a friendly country label; unknown prefixes
+  // fall back to "Other (XX)" so the user can see the prefix and
+  // decide if it's worth adding to the map. Horizontal bar so we
+  // can show 10+ countries without crowding labels.
+  const ISIN_COUNTRIES = {
+    US: 'United States', DE: 'Germany', FR: 'France', GB: 'United Kingdom',
+    IE: 'Ireland (UCITS)', LU: 'Luxembourg', NL: 'Netherlands',
+    ES: 'Spain', IT: 'Italy', CH: 'Switzerland', AT: 'Austria',
+    SE: 'Sweden', NO: 'Norway', DK: 'Denmark', FI: 'Finland',
+    BE: 'Belgium', PT: 'Portugal', GR: 'Greece', PL: 'Poland',
+    JP: 'Japan', CA: 'Canada', AU: 'Australia',
+    HK: 'Hong Kong', KR: 'South Korea', CN: 'China', TW: 'Taiwan',
+    IN: 'India', BR: 'Brazil', MX: 'Mexico', IL: 'Israel',
+    KY: 'Cayman Islands', BM: 'Bermuda', VG: 'British Virgin Islands',
+    JE: 'Jersey', GG: 'Guernsey', IM: 'Isle of Man',
+  };
+  const geoBuckets = {};
+  for (const p of (data.all_positions || [])) {
+    const isin = p.isin || '';
+    const prefix = isin.slice(0, 2).toUpperCase();
+    if (!prefix || !/^[A-Z]{2}$/.test(prefix)) continue;
+    const label = ISIN_COUNTRIES[prefix] || `Other (${prefix})`;
+    const v = Number(p.net_value_eur) || 0;
+    if (v <= 0) continue;
+    geoBuckets[label] = (geoBuckets[label] || 0) + v;
+  }
+  const geoEntries = Object.entries(geoBuckets).sort((a, b) => b[1] - a[1]);
+  // Cap to top 12 + an "Other countries" bucket to stay readable.
+  let geoData = geoEntries;
+  if (geoEntries.length > 12) {
+    const top = geoEntries.slice(0, 12);
+    const rest = geoEntries.slice(12);
+    const restTotal = rest.reduce((s, [, v]) => s + v, 0);
+    if (restTotal > 0) top.push([`Other (${rest.length} countries)`, restTotal]);
+    geoData = top;
+  }
+  const geoTotal = geoEntries.reduce((s, [, v]) => s + v, 0);
+  document.getElementById('geo-substat').textContent =
+    `${geoEntries.length} countries · €${geoTotal.toLocaleString(undefined,{maximumFractionDigits:0})} total — derived from ISIN domicile, not revenue exposure.`;
+  new Chart(document.getElementById('geoChart'), {
+    type: 'bar',
+    data: {
+      labels: geoData.map(([k]) => k),
+      datasets: [{
+        data: geoData.map(([, v]) => v),
+        backgroundColor: '#60a5fa',
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      animation: { duration: 600, easing: 'easeOutQuart' },
+      scales: {
+        x: {
+          ticks: {
+            color: '#7a8599', font: { size: 11 },
+            callback: (v) => '€' + v.toLocaleString(undefined, {maximumFractionDigits: 0}),
+          },
+          grid: { color: 'rgba(42, 49, 66, 0.5)' },
+        },
+        y: {
+          ticks: { color: '#e8eef5', font: { size: 12, weight: '500' } },
+          grid: { display: false },
+        },
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: { ...TOOLTIP,
+          callbacks: {
+            label: (ctx) => {
+              const pct = geoTotal > 0 ? (ctx.parsed.x / geoTotal * 100) : 0;
+              return ` ${fmtEur0(ctx.parsed.x)} (${pct.toFixed(1)}%)`;
             },
           },
         },

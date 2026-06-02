@@ -76,11 +76,13 @@ El orden dentro de cada sección es por impacto estimado.
   expone algo equivalente al `investments_groups` de GBM. Da confianza
   de que el número del dashboard coincide con la app móvil oficial.
 
-- [ ] **Segmentación fina de mercado** — hoy buckets son Equities/
-  Bonds/Crypto/Cash/Private. GBM tiene segmentación geográfica/operativa
-  más fina (BMV, SIC, extranjero, fondos deuda, fondos común). Para TR
-  el equivalente sería región (DE / EU / US / EM) + tipo (Stock / ETF /
-  Bond / Crypto / Cash). Más drill-down.
+- [x] **Segmentación fina de mercado** — implementado 2026-06-02 en
+  analytics.html. Nuevo chart horizontal "Geographic allocation
+  (ISIN domicile)" después del top grid. Mapea el prefijo ISIN[:2] a
+  país (US/DE/FR/IE/LU/...). Top 12 + "Other (N countries)" bucket
+  para evitar abarrotar. Caveat documentado en el substat: es por
+  domicilio del emisor, no por revenue exposure (un US tracker UCITS
+  domiciliado en IE cuenta como Ireland aunque invierta en US).
 
 ## 3. Seguridad / robustez (port verbatim de GBM)
 

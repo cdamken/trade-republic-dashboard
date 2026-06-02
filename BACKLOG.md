@@ -104,11 +104,19 @@ El orden dentro de cada sección es por impacto estimado.
   **Cuidado**: si usas el dashboard desde tu teléfono en LAN, este cambio
   te lo rompe. Confirmar con Carlos antes de hacer.
 
-- [ ] **Auto-refresh silencioso de sesión** — si tr-api expone un refresh
-  token (similar al de Cognito en GBM), implementar el mismo patrón:
-  detectar sesión expirada antes de cada call → refresh silencioso →
-  caer al modal MFA solo si el refresh falla. Reduciría el MFA de
-  "cada N horas" a "cuando expire el refresh token".
+- [x] **Auto-refresh silencioso de sesión** — investigado 2026-06-02.
+  TR-Dashboard YA tiene auto-refresh, solo que con un modelo distinto
+  al de GBM:
+  - GBM (Cognito): on-demand — `GbmClient.from_saved()` detecta
+    `is_expired` y refresca antes de la request si tiene refresh_token.
+  - TR: proactivo — `server.py::_session_keepalive_loop` corre como
+    daemon thread y llama `tr-api auth refresh` cada 290s (justo bajo
+    el TTL de cookies de TR de ~5 min). `tr_api/auth.py::refresh_session`
+    hace el GET `/api/v1/auth/web/session` que rota `JSESSIONID` +
+    `tr_session` server-side.
+  Cookies persisten en `~/.tr-api/profiles/<phone>/cookies.txt`. El
+  MFA solo se pide cuando las cookies mueren del todo (servidor TR
+  las invalida, o el keepalive falla por horas). Cerrado — funciona.
 
 - [x] **Endpoint /reset** — ya existía con UX más estricta que el de
   GBM. Botón "🗑 Wipe data + credentials" en settings.html requiere

@@ -25,6 +25,22 @@ from pathlib import Path
 
 PORT = 8085
 PROJECT_DIR = Path(__file__).resolve().parent.parent
+
+# CSRF defense: every POST (/update, /setup, /reset, /download_docs,
+# /settings) must come from a page served by THIS server — i.e. Origin
+# matches localhost:PORT. Any other origin (a malicious page in another
+# tab calling fetch() to localhost:8085) is rejected with 403.
+#
+# Requests with no Origin header (e.g. CLI tools like curl, dashboard.sh)
+# are still allowed — browsers always send Origin on POST, so a missing
+# Origin means "not a browser cross-site request". Ported verbatim from
+# gbm-dashboard 2026-06-02.
+_ALLOWED_ORIGINS = frozenset(
+    {
+        f"http://127.0.0.1:{PORT}",
+        f"http://localhost:{PORT}",
+    }
+)
 FETCH_SCRIPT = PROJECT_DIR / "app" / "tr_fetch.py"
 
 # pytr stores credentials at ~/.pytr/credentials (2 lines: phone, PIN).
@@ -237,8 +253,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "default_documents_path": str(DEFAULT_DOCS_DIR),
             })
             return
-        # Don't expose the project root directory listing.
-        if self.path in ("/", "/app", "/app/"):
+        # Don't expose the project root, and redirect any unknown path
+        # (e.g. /Dashboard/, /foo, /typo) to the portfolio page instead
+        # of a bare 404 — easier when the user mistypes or pastes a
+        # nonsense URL like `localhost:8085/Dashboard/`.
+        ALLOWED_PREFIXES = ("/app/", "/DATA/")
+        if self.path in ("/", "/app", "/app/") or not (
+            self.path.startswith(ALLOWED_PREFIXES)
+            or self.path in ("/setup_status", "/settings")
+        ):
             self.send_response(302)
             self.send_header("Location", "/app/index.html")
             self.end_headers()
@@ -248,6 +271,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     # ------------------------------------------------------------------ POST
     def do_POST(self):
+        # CSRF defense. Browsers always send Origin on POST; if a request
+        # arrives with a foreign origin, refuse before any handler runs.
+        # An empty/missing Origin (CLI tools, server-side scripts) is
+        # treated as trusted — those would have to be on the same machine
+        # to even reach this port anyway.
+        origin = self.headers.get("Origin", "")
+        if origin and origin not in _ALLOWED_ORIGINS:
+            self._json(403, {"status": "forbidden", "detail": "bad origin"})
+            return
+
         if self.path == "/setup":
             return self._handle_setup()
         if self.path == "/reset":

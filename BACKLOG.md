@@ -32,12 +32,15 @@ El orden dentro de cada sección es por impacto estimado.
     (era solo fecha). El chip se activa después del primer ⟳ Update Now
     post-cambio.
 
-- [ ] **shared.js para TR (refactor parcial cumplido)** — `_update_flow.js`
-  ya cumple el rol de "shared chrome" para las 4 páginas secundarias
-  (modales, toast, progress bar, staleness chip, update button wiring).
-  El index.html sigue con su propia copia inline. Para unificar al 100%
-  habría que portar también index.html a `_update_flow.js`. Bajo
-  prioridad — el patrón actual funciona. ~1h si se decide hacer.
+- [x] **shared.js para TR (parcial — formatters)** — implementado
+  2026-06-02. Nuevo `app/_shared.js` con `fmtEUR`, `fmtSignedEUR`,
+  `fmtDate`, `monthKey`, `monthLabel`, `parseCsv`. Las nuevas páginas
+  (orders.html, ledger.html) lo loadean. Las páginas viejas (index,
+  analytics, dividends, settings, glossary) mantienen sus copias
+  inline porque tienen firmas ligeramente diferentes (`fmtEur` vs
+  `fmtEUR`, single-arg vs (n, opts)). Migrarlas requiere normalizar
+  callsites — bajo prioridad. `_update_flow.js` ya hace el rol de
+  shared chrome (modales, toast, progress, chip).
 
 - [x] **Rotating progress messages** — ya existía. `_update_flow.js`
   define `STAGES_NORMAL` y `STAGES_FULL` que rotan en un `setInterval`

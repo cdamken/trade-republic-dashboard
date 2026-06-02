@@ -130,6 +130,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </div>
 
 <script src="_update_flow.js"></script>
+<script src="_shared.js"></script>
 
 <div id="error-box"></div>
 
@@ -209,46 +210,12 @@ tr:hover { background: rgba(255,255,255,0.02); }
 </div>
 
 <script>
-function parseCsv(text) {
-  const lines = text.replace(/\r\n/g, '\n').split('\n').filter(Boolean);
-  if (lines.length === 0) return [];
-  const header = lines[0].split(';');
-  const out = [];
-  for (let i = 1; i < lines.length; i++) {
-    const fields = lines[i].split(';');
-    if (fields.length < header.length) continue;
-    const row = {};
-    for (let j = 0; j < header.length; j++) row[header[j]] = fields[j];
-    out.push(row);
-  }
-  return out;
-}
+// parseCsv / fmtEUR / fmtSignedEUR / fmtDate / monthKey / monthLabel live in _shared.js.
 
 const state = {
   rows: [],
   sortKey: 'Date',
   sortDir: 'desc',
-};
-
-const fmtEUR = (n) => '€' + (Number(n) || 0).toLocaleString('en-US', {
-  minimumFractionDigits: 2, maximumFractionDigits: 2,
-});
-const fmtSignedEUR = (n) => (n >= 0 ? '+' : '') + fmtEUR(Math.abs(n));
-const fmtDate = (iso) => {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-US', {
-    year: 'numeric', month: 'short', day: '2-digit',
-    hour: '2-digit', minute: '2-digit',
-  });
-};
-const monthKey = (iso) => (iso || '').slice(0, 7);
-const monthLabel = (k) => {
-  if (!k) return '';
-  const [y, m] = k.split('-');
-  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${names[parseInt(m,10)-1]} ${y}`;
 };
 const catClass = (type) => {
   if (type === 'Buy') return 'cat-buy';

@@ -53,10 +53,14 @@ El orden dentro de cada sección es por impacto estimado.
 
 ## 2. Features (puerto desde GBM)
 
-- [ ] **Página Órdenes dedicada** — actualmente solo está el CSV combinado
-  de transactions. Patrón GBM: tabla con filtros por estado
-  (filled/cancelled/pending), side (buy/sell), ticker, mes. Útil para
-  ver qué se canceló.
+- [x] **Página Órdenes dedicada** — implementado 2026-06-02 en
+  `/app/orders.html`. Tabla con filtros por side (Buy/Sell), búsqueda
+  por security/ISIN, filtro de mes. Cards: total trades, total
+  bought (€), total sold (€), net flow. Parsea `account_transactions.csv`
+  client-side (Buy/Sell rows only). El link "📋 Orders" se inyectó al
+  nav de las 5 páginas existentes.
+  **Nota**: TR no tiene status filter (no expone órdenes
+  canceladas/pending al cliente personal, todas las del CSV están filled).
 
 - [ ] **Vista Ledger separada con categorías** — buys, sells, FX,
   intereses, dividends, fees, depósitos, retiros — cada uno con su

@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>Trade Republic — Orders</title>
+<style>
+:root {
+  --bg: #0f1419;
+  --card: #1a1f2e;
+  --border: #2a3142;
+  --text: #e8eef5;
+  --muted: #7a8599;
+  --green: #4ade80;
+  --red: #f87171;
+  --amber: #fbbf24;
+  --blue: #60a5fa;
+  --purple: #c084fc;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5;
+}
+
+/* Top-bar — same shell as analytics/dividends/settings */
+.top-bar { position: sticky; top: 0; z-index: 60;
+  background: rgba(15, 20, 25, 0.95);
+  display: flex; align-items: center; gap: 16px; justify-content: space-between;
+  padding: 14px 24px 10px; margin: -24px -24px 24px;
+}
+.top-bar .brand { display: flex; align-items: center; gap: 10px; }
+.top-bar h1 { font-size: 18px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; }
+.top-bar .logo-box { background: #fff; width: 28px; height: 28px; border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.top-bar nav { display: flex; gap: 4px; flex: 1; justify-content: center; }
+.top-bar nav a { color: var(--muted); text-decoration: none; font-size: 13px;
+  padding: 8px 16px; border-radius: 8px; font-weight: 500;
+  border: 1px solid transparent; cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s; }
+.top-bar nav a:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.top-bar nav a.active { color: var(--blue); background: rgba(96,165,250,0.08); border-color: var(--blue); }
+.top-bar .actions { display: flex; gap: 8px; align-items: center; }
+.top-bar .actions button { background: var(--blue); color: var(--bg); border: none;
+  padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.top-bar .actions button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+.top-bar .actions button[disabled] { opacity: 0.7; cursor: progress; }
+
+/* Cards row */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px; margin-bottom: 32px; }
+.card { background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 20px; }
+.card .label { color: var(--muted); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.8px; margin-bottom: 8px; font-weight: 600; }
+.card .value { font-size: 24px; font-weight: 700; }
+.card .delta { font-size: 12px; margin-top: 4px; color: var(--muted); }
+
+.green { color: var(--green); }
+.red { color: var(--red); }
+.muted { color: var(--muted); }
+.pos { color: var(--green); }
+.neg { color: var(--red); }
+
+.section { margin: 28px 0 14px; font-size: 17px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px; }
+.badge { background: var(--border); color: var(--muted); font-size: 12px;
+  padding: 3px 10px; border-radius: 12px; font-weight: 500; }
+
+.controls { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.controls input, .controls select {
+  background: var(--card); border: 1px solid var(--border);
+  color: var(--text); padding: 9px 13px; border-radius: 8px; font-size: 13px;
+}
+.controls input[type="text"] { min-width: 220px; }
+
+table { width: 100%; border-collapse: collapse; background: var(--card);
+  border-radius: 12px; overflow: hidden; margin-bottom: 12px; }
+th, td { text-align: left; padding: 11px 14px; font-size: 13px;
+  border-bottom: 1px solid var(--border); }
+th { background: rgba(255,255,255,0.03); color: var(--muted);
+  font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
+th:hover { color: var(--text); }
+tr:hover { background: rgba(255,255,255,0.02); }
+.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.isin { font-family: monospace; color: var(--muted); font-size: 11px; }
+
+.side-pill { display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+  font-weight: 700; }
+.side-buy  { background: rgba(96, 165, 250, 0.18); color: var(--blue); }
+.side-sell { background: rgba(192, 132, 252, 0.18); color: var(--purple); }
+
+.empty { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
+.error { background: rgba(248, 113, 113, 0.1); border-left: 4px solid var(--red);
+  padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px; }
+.warning { background: rgba(251, 191, 36, 0.1); border-left: 4px solid var(--amber);
+  padding: 14px 18px; border-radius: 8px; margin: 16px 0; font-size: 13px; }
+
+.disclaimer { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 11px; line-height: 1.6; }
+.disclaimer a { color: var(--blue); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+  <div class="brand">
+    <div class="logo-box">📋</div>
+    <h1>Trade Republic</h1>
+  </div>
+  <nav>
+    <a href="index.html">Portfolio</a>
+    <a href="analytics.html">Analytics</a>
+    <a href="orders.html" class="active">📋 Orders</a>
+    <a href="dividends.html">💰 Dividends</a>
+    <a href="settings.html">⚙ Settings</a>
+    <a href="glossary.html">📖 Glossary</a>
+  </nav>
+  <div class="actions">
+    <button class="ghost" onclick="location.href='index.html#docs'">📄 Documents</button>
+    <button id="update-btn">🔄 Update Now</button>
+  </div>
+</div>
+
+<script src="_update_flow.js"></script>
+
+<div id="error-box"></div>
+
+<!-- ---------- Summary cards ---------- -->
+<div class="cards">
+  <div class="card">
+    <div class="label">Trades</div>
+    <div class="value" id="card-total-trades">—</div>
+    <div class="delta" id="card-total-trades-sub">in window</div>
+  </div>
+  <div class="card">
+    <div class="label">Total bought</div>
+    <div class="value blue" id="card-total-buy">—</div>
+    <div class="delta muted">€ outflow (buys)</div>
+  </div>
+  <div class="card">
+    <div class="label">Total sold</div>
+    <div class="value purple" id="card-total-sell">—</div>
+    <div class="delta muted">€ inflow (sells)</div>
+  </div>
+  <div class="card">
+    <div class="label">Net flow</div>
+    <div class="value" id="card-net">—</div>
+    <div class="delta muted">sells − buys</div>
+  </div>
+</div>
+
+<!-- ---------- All trades ---------- -->
+<div class="section">
+  <span>All trades</span>
+  <span class="badge" id="trades-count">—</span>
+</div>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="Search by security or ISIN…" oninput="renderTable()">
+  <select id="side-filter" onchange="renderTable()">
+    <option value="">Buys + Sells</option>
+    <option value="Buy">Buys only</option>
+    <option value="Sell">Sells only</option>
+  </select>
+  <select id="month-filter" onchange="renderTable()">
+    <option value="">All months</option>
+  </select>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th onclick="setSort('Date')">Date</th>
+      <th onclick="setSort('Note')">Security</th>
+      <th>ISIN</th>
+      <th onclick="setSort('Type')">Side</th>
+      <th class="num">Amount (€)</th>
+    </tr>
+  </thead>
+  <tbody id="trades-tbody"></tbody>
+</table>
+
+<div class="disclaimer">
+  Dashboard local · <span style="font-family: monospace;" data-version></span> · data via
+  <a href="https://github.com/cdamken/tr-api" target="_blank">tr-api</a>.
+  Only filled trades — TR doesn't record cancelled or pending orders
+  for personal accounts (no order book exposure).
+</div>
+
+<script>
+// CSV parser tolerant to the TR `account_transactions.csv` shape:
+// Date;Type;Value;Note;ISIN;Shares;Fees;Taxes;ISIN2;Shares2
+function parseCsv(text) {
+  const lines = text.replace(/\r\n/g, '\n').split('\n').filter(Boolean);
+  if (lines.length === 0) return [];
+  const header = lines[0].split(';');
+  const out = [];
+  for (let i = 1; i < lines.length; i++) {
+    const fields = lines[i].split(';');
+    if (fields.length < header.length) continue;
+    const row = {};
+    for (let j = 0; j < header.length; j++) {
+      row[header[j]] = fields[j];
+    }
+    out.push(row);
+  }
+  return out;
+}
+
+const state = {
+  rows: [],
+  sortKey: 'Date',
+  sortDir: 'desc',
+};
+
+const fmtEUR = (n) => '€' + (Number(n) || 0).toLocaleString('en-US', {
+  minimumFractionDigits: 2, maximumFractionDigits: 2,
+});
+const fmtDate = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString('en-US', {
+    year: 'numeric', month: 'short', day: '2-digit',
+    hour: '2-digit', minute: '2-digit',
+  });
+};
+const monthKey = (iso) => (iso || '').slice(0, 7);
+const monthLabel = (k) => {
+  if (!k) return '';
+  const [y, m] = k.split('-');
+  const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${names[parseInt(m,10)-1]} ${y}`;
+};
+
+async function load() {
+  try {
+    const res = await fetch('../DATA/account_transactions.csv?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) {
+      document.getElementById('error-box').innerHTML =
+        '<div class="warning"><b>No transactions data yet.</b> Click <b>🔄 Update Now</b> above to fetch from Trade Republic.</div>';
+      return;
+    }
+    const text = await res.text();
+    const all = parseCsv(text);
+    // Trade-only subset (excludes Deposit, Dividend, Removal, etc.)
+    state.rows = all.filter(r => r.Type === 'Buy' || r.Type === 'Sell');
+    // Normalize Value to number (signed: Buy is negative, Sell is positive).
+    for (const r of state.rows) {
+      r._value = Number(r.Value) || 0;
+      r._abs = Math.abs(r._value);
+    }
+    document.getElementById('error-box').innerHTML = '';
+    populateMonthFilter();
+    renderCards();
+    renderTable();
+  } catch (e) {
+    document.getElementById('error-box').innerHTML =
+      '<div class="error"><b>Could not load the CSV.</b><br>Detail: ' + e.message + '</div>';
+  }
+}
+
+function populateMonthFilter() {
+  const sel = document.getElementById('month-filter');
+  while (sel.children.length > 1) sel.removeChild(sel.lastChild);
+  const months = [...new Set(state.rows.map(r => monthKey(r.Date)).filter(Boolean))].sort().reverse();
+  for (const m of months) {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = monthLabel(m);
+    sel.appendChild(opt);
+  }
+}
+
+function renderCards() {
+  const buys  = state.rows.filter(r => r.Type === 'Buy');
+  const sells = state.rows.filter(r => r.Type === 'Sell');
+  const buyTotal  = buys.reduce((s, r) => s + r._abs, 0);
+  const sellTotal = sells.reduce((s, r) => s + r._abs, 0);
+  const net = sellTotal - buyTotal;
+  document.getElementById('card-total-trades').textContent = state.rows.length.toLocaleString();
+  document.getElementById('card-total-trades-sub').textContent =
+    `${buys.length.toLocaleString()} buys · ${sells.length.toLocaleString()} sells`;
+  document.getElementById('card-total-buy').textContent  = fmtEUR(buyTotal);
+  document.getElementById('card-total-sell').textContent = fmtEUR(sellTotal);
+  const netEl = document.getElementById('card-net');
+  netEl.textContent = (net >= 0 ? '+' : '') + fmtEUR(Math.abs(net));
+  netEl.className = 'value ' + (net >= 0 ? 'green' : 'red');
+}
+
+function setSort(key) {
+  if (state.sortKey === key) {
+    state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.sortKey = key;
+    state.sortDir = (key === 'Date') ? 'desc' : 'asc';
+  }
+  renderTable();
+}
+
+function renderTable() {
+  const search = document.getElementById('search').value.toLowerCase();
+  const side   = document.getElementById('side-filter').value;
+  const month  = document.getElementById('month-filter').value;
+
+  let rows = state.rows.filter(r => {
+    if (side && r.Type !== side) return false;
+    if (month && monthKey(r.Date) !== month) return false;
+    if (search) {
+      const blob = `${r.Note || ''} ${r.ISIN || ''}`.toLowerCase();
+      if (!blob.includes(search)) return false;
+    }
+    return true;
+  });
+
+  rows.sort((a, b) => {
+    const va = a[state.sortKey] ?? '', vb = b[state.sortKey] ?? '';
+    if (typeof va === 'number' || typeof vb === 'number') {
+      return state.sortDir === 'asc' ? (va - vb) : (vb - va);
+    }
+    return state.sortDir === 'asc'
+      ? String(va).localeCompare(String(vb))
+      : String(vb).localeCompare(String(va));
+  });
+
+  document.getElementById('trades-count').textContent =
+    `${rows.length.toLocaleString()} / ${state.rows.length.toLocaleString()}`;
+
+  document.getElementById('trades-tbody').innerHTML = rows.map(r => {
+    const pill = r.Type === 'Buy' ? 'side-buy' : 'side-sell';
+    return `<tr>
+      <td>${fmtDate(r.Date)}</td>
+      <td>${(r.Note || '').replace(/</g, '&lt;')}</td>
+      <td class="isin">${r.ISIN || ''}</td>
+      <td><span class="side-pill ${pill}">${r.Type}</span></td>
+      <td class="num">${fmtEUR(r._abs)}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" class="empty">No trades match the filters.</td></tr>';
+}
+
+// Footer version stamp (mirrors the pattern used by index/analytics).
+const VERSION_STAMP_EL = document.querySelector('[data-version]');
+if (VERSION_STAMP_EL) VERSION_STAMP_EL.textContent = 'TR-Dashboard';
+
+load();
+</script>
+</body>
+</html>

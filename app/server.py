@@ -266,6 +266,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_header("Location", "/app/index.html")
             self.end_headers()
             return
+        # Block directory listings under the allowed prefixes (e.g.
+        # `/DATA/` would otherwise show every fetched JSON file). Individual
+        # files (e.g. `/DATA/portfolio.json`) still work — they don't end
+        # in `/`. Anything else falls through to super().do_GET() below.
+        if self.path.endswith("/"):
+            self.send_response(404)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"Directory listing disabled. Go to /app/index.html\n")
+            return
         # Anything else: serve static files via the parent class
         super().do_GET()
 

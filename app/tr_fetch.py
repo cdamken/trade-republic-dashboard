@@ -902,7 +902,12 @@ def main() -> None:
     print("Fetching transactions…", flush=True)
     fetch_transactions(client, args.full)
 
-    LAST_UPDATE_FILE.write_text(datetime.now().strftime("%Y-%m-%d") + "\n", encoding="utf-8")
+    # Full timestamp (date + time) so the UI can show a staleness chip
+    # ("hace N min", color-coded). The incremental-fetch logic above only
+    # cares about the date part — `.split()[0]` extracts it on read.
+    LAST_UPDATE_FILE.write_text(
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n", encoding="utf-8"
+    )
 
     print("Running analytics…", flush=True)
     run_analytics()

@@ -37,6 +37,19 @@ h1 { font-size: 28px; margin-bottom: 16px; display: flex; align-items: center; g
 
 .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 13px; }
 
+/* Staleness chip — shows how old the snapshot is.
+   Ported from gbm-dashboard 2026-06-02. green ≤15m, amber ≤1h, red >1h. */
+.staleness-chip {
+  display: none; margin-left: 6px;
+  padding: 2px 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 600;
+  vertical-align: middle;
+}
+.staleness-chip.show { display: inline-block; }
+.staleness-chip.fresh { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+.staleness-chip.warn  { background: rgba(251, 191, 36, 0.18); color: var(--amber); }
+.staleness-chip.stale { background: rgba(248, 113, 113, 0.22); color: var(--red); }
+
 .nav { margin-bottom: 32px; display: flex; gap: 12px; }
 .nav a { 
   color: var(--blue); 
@@ -470,7 +483,7 @@ td code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   </div>
 </div>
 
-<p class="subtitle">Data extracted via <a href="https://github.com/cdamken/tr-api" target="_blank" style="color:var(--muted); text-decoration:underline;">tr-api</a> (WebSocket TR). <span id="ts"></span></p>
+<p class="subtitle">Data extracted via <a href="https://github.com/cdamken/tr-api" target="_blank" style="color:var(--muted); text-decoration:underline;">tr-api</a> (WebSocket TR). <span id="ts"></span> <span id="last-update-age" class="staleness-chip"></span></p>
 
 <!-- ============ MFA Modal ============ -->
 <div id="mfa-modal" class="modal-backdrop" onclick="if(event.target===this)closeMfaModal()">
@@ -1279,10 +1292,58 @@ async function submitMfa() {
   }
 }
 
+// Staleness chip helper — same heuristic as gbm-dashboard. Returns
+// {label, severity} or null. Severity: fresh ≤15m, warn ≤1h, stale >1h.
+function stalenessHint(iso) {
+  if (!iso) return null;
+  const hasTz = /Z|[+-]\d{2}:?\d{2}$/.test(iso.trim());
+  // Local timestamps written by tr_fetch.py have no TZ marker — treat
+  // as the server's local time (browser=same machine here).
+  const parseable = hasTz ? iso.trim() : iso.trim().replace(' ', 'T');
+  const d = new Date(parseable);
+  if (isNaN(d.getTime())) return null;
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  let label;
+  if (mins < 1)       label = 'just now';
+  else if (mins < 60) label = `${mins} min ago`;
+  else {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    label = m === 0 ? `${h} h ago` : `${h} h ${m} min ago`;
+  }
+  const severity = mins <= 15 ? 'fresh' : mins <= 60 ? 'warn' : 'stale';
+  return { label, severity };
+}
+
 async function load() {
   const res = await fetch('../DATA/portfolio.json?t=' + Date.now());
   state.data = await res.json();
-  document.getElementById('ts').textContent = 'Last update: ' + new Date().toLocaleString();
+
+  // Real fetched-at timestamp — read the file tr_fetch.py writes when
+  // it finishes (full timestamp since 2026-06-02). Falls back to page-
+  // load time only if the file is missing (first run before any update).
+  let fetchedAt = null;
+  try {
+    const tsRes = await fetch('../DATA/last_update.date?t=' + Date.now());
+    if (tsRes.ok) fetchedAt = (await tsRes.text()).trim();
+  } catch (_) { /* ignore */ }
+  const tsEl   = document.getElementById('ts');
+  const chipEl = document.getElementById('last-update-age');
+  if (fetchedAt && /\d{4}-\d{2}-\d{2}[ T]\d/.test(fetchedAt)) {
+    // Display the actual fetch moment, parsed as local time.
+    const parseable = fetchedAt.replace(' ', 'T');
+    const d = new Date(parseable);
+    tsEl.textContent = 'Last update: ' + d.toLocaleString();
+    const stale = stalenessHint(fetchedAt);
+    if (stale && chipEl) {
+      chipEl.textContent = stale.label;
+      chipEl.className = 'staleness-chip show ' + stale.severity;
+    }
+  } else {
+    // Legacy / first-run fallback — just page load time.
+    tsEl.textContent = 'Last update: ' + new Date().toLocaleString();
+    if (chipEl) chipEl.className = 'staleness-chip';
+  }
 
   // Populate the sticky cockpit (KPIs + bucket pills). Replaces the old
   // .cards section that used to live below the nav.

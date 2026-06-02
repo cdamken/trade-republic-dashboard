@@ -111,7 +111,17 @@ const STYLES = ''
   + '.btn-cancel:hover { color:var(--text); }'
   + '.btn-submit { background:var(--blue); color:var(--bg); }'
   + '.btn-submit:hover:not(:disabled) { background:#7ab3ff; }'
-  + '.btn-submit:disabled { opacity:0.5; cursor:wait; }';
+  + '.btn-submit:disabled { opacity:0.5; cursor:wait; }'
+  // Staleness chip — fresh ≤15m / warn ≤1h / stale >1h. Ported from
+  // gbm-dashboard 2026-06-02. Injected into the top-bar .actions on
+  // every secondary page so the user can see "how old" the snapshot
+  // is right next to the Update button without going back to Portfolio.
+  + '.staleness-chip { display:none; padding:3px 9px; border-radius:10px;'
+  + '  font-size:11px; font-weight:600; vertical-align:middle; }'
+  + '.staleness-chip.show { display:inline-block; }'
+  + '.staleness-chip.fresh { background:rgba(74,222,128,0.15); color:var(--green); }'
+  + '.staleness-chip.warn  { background:rgba(251,191,36,0.18); color:var(--amber); }'
+  + '.staleness-chip.stale { background:rgba(248,113,113,0.22); color:var(--red); }';
 
 function injectStylesIfMissing() {
   if (document.getElementById('update-flow-styles')) return;
@@ -321,9 +331,63 @@ async function submitMfa() {
   }
 }
 
+// Returns {label, severity} for a "YYYY-MM-DD HH:MM:SS" timestamp, or
+// null if unparseable. Severity: fresh ≤15min, warn ≤1h, stale >1h.
+function stalenessHint(iso) {
+  if (!iso) return null;
+  const hasTz = /Z|[+-]\d{2}:?\d{2}$/.test(iso.trim());
+  const parseable = hasTz ? iso.trim() : iso.trim().replace(' ', 'T');
+  const d = new Date(parseable);
+  if (isNaN(d.getTime())) return null;
+  const mins = Math.floor((Date.now() - d.getTime()) / 60000);
+  let label;
+  if (mins < 1)       label = 'just now';
+  else if (mins < 60) label = mins + ' min ago';
+  else {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    label = m === 0 ? h + ' h ago' : h + ' h ' + m + ' min ago';
+  }
+  const severity = mins <= 15 ? 'fresh' : mins <= 60 ? 'warn' : 'stale';
+  return { label, severity };
+}
+
+// Inject the staleness chip into the top-bar .actions on every page
+// that loads _update_flow.js (the 4 secondary TR pages). Portfolio
+// (index.html) has its own inline chip in the subtitle — this script
+// doesn't load there, so no conflict.
+async function injectStalenessChip() {
+  const actions = document.querySelector('.top-bar .actions');
+  if (!actions || document.getElementById('last-update-age')) return;
+  const chip = document.createElement('span');
+  chip.id = 'last-update-age';
+  chip.className = 'staleness-chip';
+  // Insert before the Update Now button so the chip reads "natural"
+  // left-to-right: "5 min ago" → "🔄 Update Now".
+  const updateBtn = $('update-btn');
+  if (updateBtn) actions.insertBefore(chip, updateBtn);
+  else actions.appendChild(chip);
+
+  try {
+    const r = await fetch('../DATA/last_update.date?t=' + Date.now());
+    if (!r.ok) return;
+    const ts = (await r.text()).trim();
+    // Only render if the timestamp has hour granularity (post-2026-06-02
+    // tr_fetch.py writes "YYYY-MM-DD HH:MM:SS"). The legacy date-only
+    // format gets skipped — the chip stays hidden until the next Update.
+    if (!/\d{4}-\d{2}-\d{2}[ T]\d/.test(ts)) return;
+    const s = stalenessHint(ts);
+    if (!s) return;
+    chip.textContent = s.label;
+    chip.className = 'staleness-chip show ' + s.severity;
+    chip.title = 'Snapshot fetched ' + ts;
+  } catch (_) { /* ignore — chip just stays hidden */ }
+}
+
 function init() {
   injectStylesIfMissing();
   injectModalsIfMissing();
+  injectStalenessChip();
 
   const btn = $('update-btn');
   if (btn) btn.addEventListener('click', updateData);

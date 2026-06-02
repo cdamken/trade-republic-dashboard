@@ -246,6 +246,7 @@ async function updateData() {
     if (r.http === 200) {
       clearTimeout(overlayDelay);
       showStatusToast('ok', '✓ Updated — reloading');
+      broadcastUpdateComplete();   // tell other tabs to refresh their chip
       setTimeout(() => location.reload(), 800);
       return;
     }
@@ -297,6 +298,7 @@ async function submitMfa() {
     const r = await postUpdate(code, { full: fullReload });
     if (r.http === 200) {
       showStatusToast('ok', '✓ Updated — reloading');
+      broadcastUpdateComplete();
       setTimeout(() => location.reload(), 800);
       return;
     }
@@ -352,10 +354,33 @@ function stalenessHint(iso) {
   return { label, severity };
 }
 
+// Read last_update.date and re-render the chip in-place. Safe to call
+// repeatedly — does nothing if the chip element isn't in the DOM yet.
+async function refreshStalenessChip() {
+  const chip = document.getElementById('last-update-age');
+  if (!chip) return;
+  try {
+    const r = await fetch('../DATA/last_update.date?t=' + Date.now());
+    if (!r.ok) return;
+    const ts = (await r.text()).trim();
+    if (!/\d{4}-\d{2}-\d{2}[ T]\d/.test(ts)) return;
+    const s = stalenessHint(ts);
+    if (!s) return;
+    chip.textContent = s.label;
+    chip.className = 'staleness-chip show ' + s.severity;
+    chip.title = 'Snapshot fetched ' + ts;
+  } catch (_) { /* keep prior state on error */ }
+}
+
 // Inject the staleness chip into the top-bar .actions on every page
-// that loads _update_flow.js (the 4 secondary TR pages). Portfolio
+// that loads _update_flow.js (the 5 secondary TR pages). Portfolio
 // (index.html) has its own inline chip in the subtitle — this script
 // doesn't load there, so no conflict.
+//
+// After the first render we set up a 60s interval to keep the label
+// fresh (so "2 min ago" becomes "3 min ago" without a reload) and to
+// catch updates triggered from OTHER tabs (where this tab's chip
+// would otherwise stay frozen at its initial value).
 async function injectStalenessChip() {
   const actions = document.querySelector('.top-bar .actions');
   if (!actions || document.getElementById('last-update-age')) return;
@@ -368,20 +393,29 @@ async function injectStalenessChip() {
   if (updateBtn) actions.insertBefore(chip, updateBtn);
   else actions.appendChild(chip);
 
-  try {
-    const r = await fetch('../DATA/last_update.date?t=' + Date.now());
-    if (!r.ok) return;
-    const ts = (await r.text()).trim();
-    // Only render if the timestamp has hour granularity (post-2026-06-02
-    // tr_fetch.py writes "YYYY-MM-DD HH:MM:SS"). The legacy date-only
-    // format gets skipped — the chip stays hidden until the next Update.
-    if (!/\d{4}-\d{2}-\d{2}[ T]\d/.test(ts)) return;
-    const s = stalenessHint(ts);
-    if (!s) return;
-    chip.textContent = s.label;
-    chip.className = 'staleness-chip show ' + s.severity;
-    chip.title = 'Snapshot fetched ' + ts;
-  } catch (_) { /* ignore — chip just stays hidden */ }
+  await refreshStalenessChip();
+  // Poll every minute. 60s is a balance between freshness and load —
+  // the request is 20 bytes, parsing is microseconds, no real cost.
+  setInterval(refreshStalenessChip, 60_000);
+}
+
+// Cross-tab signaling: when Update Now finishes in one tab, broadcast
+// so the chip in OTHER tabs refreshes instantly without waiting for
+// the 60s poll. BroadcastChannel is widely supported (Chrome, Safari,
+// Firefox). Falls through silently on browsers that don't have it.
+let _trUpdateChannel = null;
+try {
+  _trUpdateChannel = new BroadcastChannel('tr-dashboard-update');
+  _trUpdateChannel.onmessage = (e) => {
+    if (e.data && e.data.type === 'update-complete') {
+      refreshStalenessChip();
+    }
+  };
+} catch (_) { /* old browser — fall back to 60s poll */ }
+function broadcastUpdateComplete() {
+  if (_trUpdateChannel) {
+    try { _trUpdateChannel.postMessage({ type: 'update-complete', t: Date.now() }); } catch (_) {}
+  }
 }
 
 function init() {

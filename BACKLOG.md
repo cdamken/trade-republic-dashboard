@@ -62,10 +62,15 @@ El orden dentro de cada sección es por impacto estimado.
   **Nota**: TR no tiene status filter (no expone órdenes
   canceladas/pending al cliente personal, todas las del CSV están filled).
 
-- [ ] **Vista Ledger separada con categorías** — buys, sells, FX,
-  intereses, dividends, fees, depósitos, retiros — cada uno con su
-  pill de color. Patrón del Libro Diario de GBM. Más rico que el CSV
-  plano actual.
+- [x] **Vista Ledger separada con categorías** — implementado 2026-06-02
+  en `/app/ledger.html`. Tabla de los 6000+ rows del CSV con pills de
+  color por categoría (Buy/Sell/Dividend/Interest/Deposit/Withdrawal/
+  Removal/Tax Refund). Filtros: búsqueda, categoría, mes, page size
+  (200/500/1000/All). Cards summary: total events, cash flow neto
+  (deposits − withdrawals − removals + tax refund), dividend+interest,
+  card spending. Link "📒 Ledger" insertado al nav de las 6 páginas
+  existentes (orden: Portfolio → Analytics → Orders → Ledger →
+  Dividends → Settings → Glossary).
 
 - [ ] **Cross-validation del total** con un segundo endpoint si TR
   expone algo equivalente al `investments_groups` de GBM. Da confianza

@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>Trade Republic — Orders</title>
+<title>Trade Republic — Ledger</title>
 <style>
 :root {
   --bg: #0f1419;
@@ -26,17 +26,15 @@ body {
   background: var(--bg); color: var(--text); padding: 24px; line-height: 1.5;
 }
 
-/* Top-bar — same shell as analytics/dividends/settings */
 .top-bar { position: sticky; top: 0; z-index: 60;
   background: rgba(15, 20, 25, 0.95);
   display: flex; align-items: center; gap: 16px; justify-content: space-between;
-  padding: 14px 24px 10px; margin: -24px -24px 24px;
-}
+  padding: 14px 24px 10px; margin: -24px -24px 24px; }
 .top-bar .brand { display: flex; align-items: center; gap: 10px; }
 .top-bar h1 { font-size: 18px; font-weight: 700; margin: 0; display: flex; align-items: center; gap: 10px; }
 .top-bar .logo-box { background: #fff; width: 28px; height: 28px; border-radius: 4px;
   display: flex; align-items: center; justify-content: center; font-size: 16px; }
-.top-bar nav { display: flex; gap: 4px; flex: 1; justify-content: center; }
+.top-bar nav { display: flex; gap: 4px; flex: 1; justify-content: center; flex-wrap: wrap; }
 .top-bar nav a { color: var(--muted); text-decoration: none; font-size: 13px;
   padding: 8px 16px; border-radius: 8px; font-weight: 500;
   border: 1px solid transparent; cursor: pointer;
@@ -48,23 +46,19 @@ body {
   padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: 600;
   cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .top-bar .actions button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
-.top-bar .actions button[disabled] { opacity: 0.7; cursor: progress; }
 
-/* Cards row */
-.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px; margin-bottom: 32px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px; margin-bottom: 28px; }
 .card { background: var(--card); border: 1px solid var(--border);
-  border-radius: 12px; padding: 18px 20px; }
+  border-radius: 12px; padding: 16px 20px; }
 .card .label { color: var(--muted); font-size: 11px; text-transform: uppercase;
-  letter-spacing: 0.8px; margin-bottom: 8px; font-weight: 600; }
-.card .value { font-size: 24px; font-weight: 700; }
-.card .delta { font-size: 12px; margin-top: 4px; color: var(--muted); }
+  letter-spacing: 0.8px; margin-bottom: 6px; font-weight: 600; }
+.card .value { font-size: 22px; font-weight: 700; }
+.card .delta { font-size: 11px; margin-top: 3px; color: var(--muted); }
 
 .green { color: var(--green); }
 .red { color: var(--red); }
 .muted { color: var(--muted); }
-.pos { color: var(--green); }
-.neg { color: var(--red); }
 
 .section { margin: 28px 0 14px; font-size: 17px; font-weight: 700;
   display: flex; align-items: center; gap: 10px; }
@@ -80,7 +74,7 @@ body {
 
 table { width: 100%; border-collapse: collapse; background: var(--card);
   border-radius: 12px; overflow: hidden; margin-bottom: 12px; }
-th, td { text-align: left; padding: 11px 14px; font-size: 13px;
+th, td { text-align: left; padding: 10px 14px; font-size: 13px;
   border-bottom: 1px solid var(--border); }
 th { background: rgba(255,255,255,0.03); color: var(--muted);
   font-weight: 600; cursor: pointer; user-select: none; white-space: nowrap; }
@@ -89,17 +83,24 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .isin { font-family: monospace; color: var(--muted); font-size: 11px; }
 
-.side-pill { display: inline-block; padding: 2px 8px; border-radius: 10px;
+.cat-pill { display: inline-block; padding: 2px 8px; border-radius: 10px;
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
-  font-weight: 700; }
-.side-buy  { background: rgba(96, 165, 250, 0.18); color: var(--blue); }
-.side-sell { background: rgba(192, 132, 252, 0.18); color: var(--purple); }
+  font-weight: 700; white-space: nowrap; }
+.cat-buy        { background: rgba(96, 165, 250, 0.18); color: var(--blue); }
+.cat-sell       { background: rgba(192, 132, 252, 0.18); color: var(--purple); }
+.cat-dividend   { background: rgba(74, 222, 128, 0.18); color: var(--green); }
+.cat-interest   { background: rgba(74, 222, 128, 0.12); color: var(--green); }
+.cat-deposit    { background: rgba(74, 222, 128, 0.28); color: var(--green); border: 1px solid var(--green); }
+.cat-withdrawal { background: rgba(248, 113, 113, 0.18); color: var(--red); }
+.cat-removal    { background: rgba(248, 113, 113, 0.10); color: var(--red); }
+.cat-tax-refund { background: rgba(251, 191, 36, 0.18); color: var(--amber); }
+.cat-other      { background: var(--border); color: var(--muted); }
 
 .empty { text-align: center; padding: 40px; color: var(--muted); font-size: 14px; }
-.error { background: rgba(248, 113, 113, 0.1); border-left: 4px solid var(--red);
-  padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px; }
 .warning { background: rgba(251, 191, 36, 0.1); border-left: 4px solid var(--amber);
   padding: 14px 18px; border-radius: 8px; margin: 16px 0; font-size: 13px; }
+.error { background: rgba(248, 113, 113, 0.1); border-left: 4px solid var(--red);
+  padding: 16px 20px; border-radius: 8px; margin: 20px 0; font-size: 14px; }
 
 .disclaimer { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border);
   color: var(--muted); font-size: 11px; line-height: 1.6; }
@@ -110,14 +111,14 @@ tr:hover { background: rgba(255,255,255,0.02); }
 
 <div class="top-bar">
   <div class="brand">
-    <div class="logo-box">📋</div>
+    <div class="logo-box">📒</div>
     <h1>Trade Republic</h1>
   </div>
   <nav>
     <a href="index.html">Portfolio</a>
     <a href="analytics.html">Analytics</a>
-    <a href="orders.html" class="active">📋 Orders</a>
-    <a href="ledger.html">📒 Ledger</a>
+    <a href="orders.html">📋 Orders</a>
+    <a href="ledger.html" class="active">📒 Ledger</a>
     <a href="dividends.html">💰 Dividends</a>
     <a href="settings.html">⚙ Settings</a>
     <a href="glossary.html">📖 Glossary</a>
@@ -132,45 +133,57 @@ tr:hover { background: rgba(255,255,255,0.02); }
 
 <div id="error-box"></div>
 
-<!-- ---------- Summary cards ---------- -->
+<!-- ---------- Summary cards (per category) ---------- -->
 <div class="cards">
   <div class="card">
-    <div class="label">Trades</div>
-    <div class="value" id="card-total-trades">—</div>
-    <div class="delta" id="card-total-trades-sub">in window</div>
+    <div class="label">Total events</div>
+    <div class="value" id="card-total">—</div>
+    <div class="delta muted">all categories</div>
   </div>
   <div class="card">
-    <div class="label">Total bought</div>
-    <div class="value blue" id="card-total-buy">—</div>
-    <div class="delta muted">€ outflow (buys)</div>
+    <div class="label">Cash flow (net)</div>
+    <div class="value" id="card-cashflow">—</div>
+    <div class="delta muted">deposits − withdrawals − removals + tax refund</div>
   </div>
   <div class="card">
-    <div class="label">Total sold</div>
-    <div class="value purple" id="card-total-sell">—</div>
-    <div class="delta muted">€ inflow (sells)</div>
+    <div class="label">Dividends + interest</div>
+    <div class="value green" id="card-income">—</div>
+    <div class="delta muted">passive income</div>
   </div>
   <div class="card">
-    <div class="label">Net flow</div>
-    <div class="value" id="card-net">—</div>
-    <div class="delta muted">sells − buys</div>
+    <div class="label">Card spending</div>
+    <div class="value red" id="card-spending">—</div>
+    <div class="delta muted">Removal — TR card</div>
   </div>
 </div>
 
-<!-- ---------- All trades ---------- -->
+<!-- ---------- All events ---------- -->
 <div class="section">
-  <span>All trades</span>
-  <span class="badge" id="trades-count">—</span>
+  <span>All events</span>
+  <span class="badge" id="events-count">—</span>
 </div>
 
 <div class="controls">
-  <input type="text" id="search" placeholder="Search by security or ISIN…" oninput="renderTable()">
-  <select id="side-filter" onchange="renderTable()">
-    <option value="">Buys + Sells</option>
-    <option value="Buy">Buys only</option>
-    <option value="Sell">Sells only</option>
+  <input type="text" id="search" placeholder="Search by security, ISIN or note…" oninput="renderTable()">
+  <select id="type-filter" onchange="renderTable()">
+    <option value="">All categories</option>
+    <option value="Buy">Buy</option>
+    <option value="Sell">Sell</option>
+    <option value="Dividend">Dividend</option>
+    <option value="Interest">Interest</option>
+    <option value="Deposit">Deposit</option>
+    <option value="Withdrawal">Withdrawal</option>
+    <option value="Removal">Removal (card)</option>
+    <option value="Tax Refund">Tax Refund</option>
   </select>
   <select id="month-filter" onchange="renderTable()">
     <option value="">All months</option>
+  </select>
+  <select id="page-size" onchange="renderTable()">
+    <option value="200">200 rows</option>
+    <option value="500" selected>500 rows</option>
+    <option value="1000">1000 rows</option>
+    <option value="999999">All rows (slow)</option>
   </select>
 </div>
 
@@ -178,25 +191,24 @@ tr:hover { background: rgba(255,255,255,0.02); }
   <thead>
     <tr>
       <th onclick="setSort('Date')">Date</th>
-      <th onclick="setSort('Note')">Security</th>
+      <th onclick="setSort('Type')">Category</th>
+      <th onclick="setSort('Note')">Detail</th>
       <th>ISIN</th>
-      <th onclick="setSort('Type')">Side</th>
       <th class="num">Amount (€)</th>
     </tr>
   </thead>
-  <tbody id="trades-tbody"></tbody>
+  <tbody id="events-tbody"></tbody>
 </table>
 
 <div class="disclaimer">
   Dashboard local · <span style="font-family: monospace;" data-version></span> · data via
   <a href="https://github.com/cdamken/tr-api" target="_blank">tr-api</a>.
-  Only filled trades — TR doesn't record cancelled or pending orders
-  for personal accounts (no order book exposure).
+  Categories reflect Trade Republic's CSV. Sign of Amount = sign of the
+  CSV Value field (Buy/Withdrawal/Removal are negative). For
+  filled-trades-only view see <a href="orders.html">Orders</a>.
 </div>
 
 <script>
-// CSV parser tolerant to the TR `account_transactions.csv` shape:
-// Date;Type;Value;Note;ISIN;Shares;Fees;Taxes;ISIN2;Shares2
 function parseCsv(text) {
   const lines = text.replace(/\r\n/g, '\n').split('\n').filter(Boolean);
   if (lines.length === 0) return [];
@@ -206,9 +218,7 @@ function parseCsv(text) {
     const fields = lines[i].split(';');
     if (fields.length < header.length) continue;
     const row = {};
-    for (let j = 0; j < header.length; j++) {
-      row[header[j]] = fields[j];
-    }
+    for (let j = 0; j < header.length; j++) row[header[j]] = fields[j];
     out.push(row);
   }
   return out;
@@ -223,6 +233,7 @@ const state = {
 const fmtEUR = (n) => '€' + (Number(n) || 0).toLocaleString('en-US', {
   minimumFractionDigits: 2, maximumFractionDigits: 2,
 });
+const fmtSignedEUR = (n) => (n >= 0 ? '+' : '') + fmtEUR(Math.abs(n));
 const fmtDate = (iso) => {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -239,6 +250,17 @@ const monthLabel = (k) => {
   const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return `${names[parseInt(m,10)-1]} ${y}`;
 };
+const catClass = (type) => {
+  if (type === 'Buy') return 'cat-buy';
+  if (type === 'Sell') return 'cat-sell';
+  if (type === 'Dividend') return 'cat-dividend';
+  if (type === 'Interest') return 'cat-interest';
+  if (type === 'Deposit') return 'cat-deposit';
+  if (type === 'Withdrawal') return 'cat-withdrawal';
+  if (type === 'Removal') return 'cat-removal';
+  if (type === 'Tax Refund') return 'cat-tax-refund';
+  return 'cat-other';
+};
 
 async function load() {
   try {
@@ -249,10 +271,7 @@ async function load() {
       return;
     }
     const text = await res.text();
-    const all = parseCsv(text);
-    // Trade-only subset (excludes Deposit, Dividend, Removal, etc.)
-    state.rows = all.filter(r => r.Type === 'Buy' || r.Type === 'Sell');
-    // Normalize Value to number (signed: Buy is negative, Sell is positive).
+    state.rows = parseCsv(text);
     for (const r of state.rows) {
       r._value = Number(r.Value) || 0;
       r._abs = Math.abs(r._value);
@@ -280,19 +299,19 @@ function populateMonthFilter() {
 }
 
 function renderCards() {
-  const buys  = state.rows.filter(r => r.Type === 'Buy');
-  const sells = state.rows.filter(r => r.Type === 'Sell');
-  const buyTotal  = buys.reduce((s, r) => s + r._abs, 0);
-  const sellTotal = sells.reduce((s, r) => s + r._abs, 0);
-  const net = sellTotal - buyTotal;
-  document.getElementById('card-total-trades').textContent = state.rows.length.toLocaleString();
-  document.getElementById('card-total-trades-sub').textContent =
-    `${buys.length.toLocaleString()} buys · ${sells.length.toLocaleString()} sells`;
-  document.getElementById('card-total-buy').textContent  = fmtEUR(buyTotal);
-  document.getElementById('card-total-sell').textContent = fmtEUR(sellTotal);
-  const netEl = document.getElementById('card-net');
-  netEl.textContent = (net >= 0 ? '+' : '') + fmtEUR(Math.abs(net));
-  netEl.className = 'value ' + (net >= 0 ? 'green' : 'red');
+  document.getElementById('card-total').textContent = state.rows.length.toLocaleString();
+  const sumBy = (type) => state.rows.filter(r => r.Type === type).reduce((s, r) => s + r._abs, 0);
+  const deposits   = sumBy('Deposit');
+  const withdrawals = sumBy('Withdrawal');
+  const removals   = sumBy('Removal');
+  const taxRefund  = sumBy('Tax Refund');
+  const dividends  = sumBy('Dividend');
+  const interest   = sumBy('Interest');
+  const netCash = deposits - withdrawals - removals + taxRefund;
+  document.getElementById('card-cashflow').textContent = fmtSignedEUR(netCash);
+  document.getElementById('card-cashflow').className = 'value ' + (netCash >= 0 ? 'green' : 'red');
+  document.getElementById('card-income').textContent = fmtEUR(dividends + interest);
+  document.getElementById('card-spending').textContent = fmtEUR(removals);
 }
 
 function setSort(key) {
@@ -300,52 +319,54 @@ function setSort(key) {
     state.sortDir = state.sortDir === 'asc' ? 'desc' : 'asc';
   } else {
     state.sortKey = key;
-    state.sortDir = (key === 'Date') ? 'desc' : 'asc';
+    state.sortDir = key === 'Date' ? 'desc' : 'asc';
   }
   renderTable();
 }
 
 function renderTable() {
   const search = document.getElementById('search').value.toLowerCase();
-  const side   = document.getElementById('side-filter').value;
+  const type   = document.getElementById('type-filter').value;
   const month  = document.getElementById('month-filter').value;
+  const limit  = parseInt(document.getElementById('page-size').value, 10) || 500;
 
   let rows = state.rows.filter(r => {
-    if (side && r.Type !== side) return false;
+    if (type && r.Type !== type) return false;
     if (month && monthKey(r.Date) !== month) return false;
     if (search) {
-      const blob = `${r.Note || ''} ${r.ISIN || ''}`.toLowerCase();
+      const blob = `${r.Note || ''} ${r.ISIN || ''} ${r.Type || ''}`.toLowerCase();
       if (!blob.includes(search)) return false;
     }
     return true;
   });
 
   rows.sort((a, b) => {
-    const va = a[state.sortKey] ?? '', vb = b[state.sortKey] ?? '';
-    if (typeof va === 'number' || typeof vb === 'number') {
-      return state.sortDir === 'asc' ? (va - vb) : (vb - va);
-    }
+    const va = a[state.sortKey] ?? '';
+    const vb = b[state.sortKey] ?? '';
     return state.sortDir === 'asc'
       ? String(va).localeCompare(String(vb))
       : String(vb).localeCompare(String(va));
   });
 
-  document.getElementById('trades-count').textContent =
-    `${rows.length.toLocaleString()} / ${state.rows.length.toLocaleString()}`;
+  const truncated = rows.length > limit ? rows.slice(0, limit) : rows;
+  document.getElementById('events-count').textContent =
+    rows.length > limit
+      ? `${truncated.length.toLocaleString()} of ${rows.length.toLocaleString()} (truncated)`
+      : `${rows.length.toLocaleString()} / ${state.rows.length.toLocaleString()}`;
 
-  document.getElementById('trades-tbody').innerHTML = rows.map(r => {
-    const pill = r.Type === 'Buy' ? 'side-buy' : 'side-sell';
+  document.getElementById('events-tbody').innerHTML = truncated.map(r => {
+    const cls = catClass(r.Type);
+    const amtCls = r._value >= 0 ? 'green' : 'red';
     return `<tr>
       <td>${fmtDate(r.Date)}</td>
+      <td><span class="cat-pill ${cls}">${r.Type}</span></td>
       <td>${(r.Note || '').replace(/</g, '&lt;')}</td>
       <td class="isin">${r.ISIN || ''}</td>
-      <td><span class="side-pill ${pill}">${r.Type}</span></td>
-      <td class="num">${fmtEUR(r._abs)}</td>
+      <td class="num ${amtCls}">${fmtSignedEUR(r._value)}</td>
     </tr>`;
-  }).join('') || '<tr><td colspan="5" class="empty">No trades match the filters.</td></tr>';
+  }).join('') || '<tr><td colspan="5" class="empty">No events match the filters.</td></tr>';
 }
 
-// Footer version stamp (mirrors the pattern used by index/analytics).
 const VERSION_STAMP_EL = document.querySelector('[data-version]');
 if (VERSION_STAMP_EL) VERSION_STAMP_EL.textContent = 'TR-Dashboard';
 

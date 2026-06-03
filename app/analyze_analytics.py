@@ -140,8 +140,10 @@ def fetch_benchmark_monthly(symbol, start_date, end_date, cache_path=None):
     try:
         p1 = int(datetime.combine(start_date, datetime.min.time()).timestamp())
         p2 = int(datetime.combine(end_date,   datetime.min.time()).timestamp())
+        # interval=1d so the benchmark replay line moves day-by-day,
+        # not in monthly stair-steps.
         url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-               f"?period1={p1}&period2={p2}&interval=1mo&events=history")
+               f"?period1={p1}&period2={p2}&interval=1d&events=history")
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as r:
             payload = json.loads(r.read())

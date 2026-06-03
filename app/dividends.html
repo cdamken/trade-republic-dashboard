@@ -555,15 +555,35 @@ function renderTable() {
   });
 
   document.getElementById('rows-count').textContent = `${rows.length} / ${state.rows.length}`;
-  document.getElementById('payments-tbody').innerHTML = rows.length
-    ? rows.map(p => `<tr>
-        <td>${formatDate(p.date)}</td>
-        <td class="ticker">${p.name || '—'}</td>
-        <td class="tx-isin">${p.isin || '—'}</td>
-        <td>${kindPill(p)}</td>
-        <td class="num">${fmtEur(p.amount || 0)}</td>
-      </tr>`).join('')
-    : '<tr><td colspan="5" class="empty">No payments match the current filters</td></tr>';
+  // Cap visible rows at LIMIT so the table stays glanceable. The user
+  // sees the top of whatever sort they chose (date desc by default →
+  // newest 50). Label adapts to filtered/unfiltered + current sort.
+  const LIMIT = 50;
+  const isFiltered = rows.length < state.rows.length;
+  const truncated = rows.length > LIMIT;
+  const visible = truncated ? rows.slice(0, LIMIT) : rows;
+
+  const tbody = document.getElementById('payments-tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty">No payments match the current filters</td></tr>';
+    return;
+  }
+  let html = visible.map(p => `<tr>
+      <td>${formatDate(p.date)}</td>
+      <td class="ticker">${p.name || '—'}</td>
+      <td class="tx-isin">${p.isin || '—'}</td>
+      <td>${kindPill(p)}</td>
+      <td class="num">${fmtEur(p.amount || 0)}</td>
+    </tr>`).join('');
+  if (truncated) {
+    const sortLabel = (state.sortKey === 'date' && state.sortDir === 'desc') ? 'newest'
+                    : (state.sortKey === 'date' && state.sortDir === 'asc')  ? 'oldest'
+                    : 'top';
+    const matchHint = isFiltered ? ' matching the filters' : '';
+    const refineHint = isFiltered ? 'further' : 'with filters above';
+    html += `<tr><td colspan="5" class="empty">showing ${sortLabel} ${LIMIT} of ${rows.length}${matchHint} — refine ${refineHint}</td></tr>`;
+  }
+  tbody.innerHTML = html;
 }
 
 load();

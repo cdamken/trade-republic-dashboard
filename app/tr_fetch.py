@@ -642,8 +642,15 @@ def _append_net_worth_history(summary: dict[str, Any]) -> None:
 # --------------------------------------------------------------------------
 # Transactions: timeline → CSV in the schema analyze_analytics.py expects
 # --------------------------------------------------------------------------
+# EventType / EventSubType: raw TR strings captured for debugging.
+# Useful when our EVENT_TYPE_MAP buckets multiple TR types under one
+# CSV "Type" (e.g. CREDIT and SSP_CORPORATE_ACTION_CASH both become
+# "Dividend") and we need to discriminate after the fact. Appended at
+# the end so older CSV consumers (analyze_analytics.py reads by name)
+# stay unaffected.
 CSV_COLUMNS = ["Date", "Type", "Value", "Note", "ISIN", "Shares",
-               "Fees", "Taxes", "ISIN2", "Shares2"]
+               "Fees", "Taxes", "ISIN2", "Shares2",
+               "EventType", "EventSubType"]
 
 
 async def _paginate_topic_on_ws(ws, topic: str, *, cutoff=None, max_pages: int = 2000):
@@ -820,6 +827,18 @@ def _row_from_tr_event(ev: dict[str, Any]) -> dict[str, Any] | None:
                 isin = piece
                 break
 
+    # Capture both the top-level eventType and any subType the timeline
+    # exposes — TR uses subType to discriminate between "promo credit",
+    # "referral bonus", "Tagesgeld+ interest", etc. all under the umbrella
+    # eventType=CREDIT. Without these the CSV can't tell us why a
+    # "Dividend" row has no ISIN.
+    ev_subtype = (
+        ev.get("eventSubType")
+        or ev.get("subEventType")
+        or (ev.get("details") or {}).get("subType")
+        or ""
+    )
+
     return {
         "Date":   timestamp,
         "Type":   csv_type,
@@ -831,6 +850,8 @@ def _row_from_tr_event(ev: dict[str, Any]) -> dict[str, Any] | None:
         "Taxes":  "",
         "ISIN2":  "",
         "Shares2": "",
+        "EventType":    ev_type,
+        "EventSubType": ev_subtype,
     }
 
 

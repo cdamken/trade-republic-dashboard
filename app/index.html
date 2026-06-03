@@ -1429,14 +1429,19 @@ async function load() {
 // lookup is the fallback for fundamentals + news. Both open in a new
 // tab. No API calls; pure permalinks.
 function externalLinks(isin) {
+  // Three compact research links per position row. All work natively
+  // by ISIN (Yahoo Finance + StockAnalysis were broken — Yahoo killed
+  // their lookup endpoint years ago and StockAnalysis only handles
+  // tickers). Boerse Frankfurt accepts any ISIN and covers stocks,
+  // ETFs, and bonds; Google is the universal fallback.
   if (!isin) return '';
-  const tr = `https://app.traderepublic.com/instrument/${encodeURIComponent(isin)}`;
-  const yahoo = `https://finance.yahoo.com/lookup/?s=${encodeURIComponent(isin)}`;
-  const sa = `https://stockanalysis.com/quote/iso/${encodeURIComponent(isin)}`;
+  const tr = `https://app.traderepublic.com/profile/instrument/${encodeURIComponent(isin)}`;
+  const bf = `https://www.boerse-frankfurt.de/equity/${encodeURIComponent(isin)}`;
+  const google = `https://www.google.com/search?q=${encodeURIComponent(isin + ' stock')}`;
   return `<span class="ext-links">
-    <a href="${tr}" target="_blank" rel="noopener" title="Open on Trade Republic">TR</a>
-    <a href="${yahoo}" target="_blank" rel="noopener" title="Look up on Yahoo Finance">Y!</a>
-    <a href="${sa}" target="_blank" rel="noopener" title="Look up on Stock Analysis">SA</a>
+    <a href="${tr}" target="_blank" rel="noopener" title="Open on Trade Republic (requires TR login)">TR</a>
+    <a href="${bf}" target="_blank" rel="noopener" title="Look up on Boerse Frankfurt (stocks, ETFs, bonds by ISIN)">BF</a>
+    <a href="${google}" target="_blank" rel="noopener" title="Google search by ISIN">G</a>
   </span>`;
 }
 
@@ -1523,20 +1528,22 @@ function openPositionModal(isin, name) {
       · ISIN: <code>${isin}</code>
     </div>
     <p class="pm-tip">
-      Click the buttons below to open the live charts, fundamentals, news
-      and analyst pages in a new tab. We can't embed them here directly
-      because Trade Republic and Yahoo Finance both block iframe
-      embedding for security (<code>X-Frame-Options</code>).
+      Click the buttons below to open external research in a new tab.
+      All links work by ISIN. We can't embed them here directly because
+      most financial sites block iframe embedding for security
+      (<code>X-Frame-Options</code>).
     </p>
   `;
 
-  // Footer: external research links (open in new tabs).
+  // Footer: external research links (open in new tabs). All work
+  // natively by ISIN. Trade Republic requires a logged-in session
+  // in the same browser; the others are public.
   const links = document.getElementById('position-modal-links');
   links.innerHTML =
-    `<a href="https://app.traderepublic.com/instrument/${encodeURIComponent(isin)}" target="_blank" rel="noopener">📊 Trade Republic ↗</a>` +
-    `<a href="https://finance.yahoo.com/lookup/?s=${encodeURIComponent(isin)}" target="_blank" rel="noopener">Yahoo Finance ↗</a>` +
-    `<a href="https://stockanalysis.com/quote/iso/${encodeURIComponent(isin)}" target="_blank" rel="noopener">Stock Analysis ↗</a>` +
-    `<a href="https://www.google.com/search?q=${encodeURIComponent(isin + ' stock')}" target="_blank" rel="noopener">Google ↗</a>`;
+    `<a href="https://app.traderepublic.com/profile/instrument/${encodeURIComponent(isin)}" target="_blank" rel="noopener">📊 Trade Republic ↗</a>` +
+    `<a href="https://www.boerse-frankfurt.de/equity/${encodeURIComponent(isin)}" target="_blank" rel="noopener">📈 Boerse Frankfurt ↗</a>` +
+    `<a href="https://www.justetf.com/en/etf-profile.html?isin=${encodeURIComponent(isin)}" target="_blank" rel="noopener">🧮 JustETF (ETFs only) ↗</a>` +
+    `<a href="https://www.google.com/search?q=${encodeURIComponent(isin + ' stock')}" target="_blank" rel="noopener">🔎 Google ↗</a>`;
   modal.classList.add('open');
 }
 

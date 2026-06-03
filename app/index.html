@@ -233,7 +233,7 @@ tr:hover { background: rgba(255,255,255,0.02); }
   margin: 0 -24px 24px;  /* reach to page edges */
 }
 .cockpit-row { display: grid; gap: 18px; align-items: center; }
-.cockpit-row.kpis    { grid-template-columns: 2fr 1fr 1fr 1fr; margin-bottom: 10px; }
+.cockpit-row.kpis    { grid-template-columns: 2fr 1fr 1fr 1fr 1fr; margin-bottom: 10px; }
 .cockpit-row.buckets { grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .cockpit .ck-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; }
 .cockpit .ck-value { font-size: 26px; font-weight: 800; margin-top: 2px; }
@@ -473,6 +473,11 @@ td code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
       <div class="ck-label">Total P/L</div>
       <div class="ck-value" id="ck-pl">€0.00</div>
       <div class="ck-sub" id="ck-pl-pct">0.00%</div>
+    </div>
+    <div title="Annualized money-weighted return (XIRR). Uses all external cash flows (deposits + tax refunds minus withdrawals) plus today's portfolio value as the terminal flow. Unlike P/L %, this is time-aware: capital that worked longer counts more.">
+      <div class="ck-label">XIRR (annualized)</div>
+      <div class="ck-value" id="ck-xirr">—</div>
+      <div class="ck-sub" id="ck-xirr-sub">money-weighted</div>
     </div>
     <div>
       <div class="ck-label">Available Cash</div>
@@ -1383,6 +1388,14 @@ async function load() {
   const res = await fetch('../DATA/portfolio.json?t=' + Date.now());
   state.data = await res.json();
 
+  // Analytics is optional — first-run users won't have it yet, and a
+  // missing file shouldn't break the portfolio render. We use it for
+  // the XIRR card and any future analytics-derived KPIs.
+  try {
+    const aRes = await fetch('../DATA/analytics.json?t=' + Date.now());
+    state.analytics = aRes.ok ? await aRes.json() : null;
+  } catch (_) { state.analytics = null; }
+
   // Real fetched-at timestamp — read the file tr_fetch.py writes when
   // it finishes (full timestamp since 2026-06-02). Falls back to page-
   // load time only if the file is missing (first run before any update).
@@ -1615,6 +1628,23 @@ function renderCockpit(summary, data) {
   plEl.classList.remove('pl-pos', 'pl-neg'); plEl.classList.add(plCls);
   plPctEl.classList.remove('pl-pos', 'pl-neg'); plPctEl.classList.add(plCls);
   document.getElementById('ck-cash').textContent = fmtEUR(summary.cash_eur);
+
+  // XIRR — read from analytics.json (cash_flow.xirr is a percent number).
+  // null = not enough flows / didn't converge → show em-dash like GBM.
+  const xirr = state?.analytics?.cash_flow?.xirr;
+  const xirrEl = document.getElementById('ck-xirr');
+  const xirrSubEl = document.getElementById('ck-xirr-sub');
+  if (xirr == null || isNaN(xirr)) {
+    xirrEl.textContent = '—';
+    xirrEl.classList.remove('pl-pos', 'pl-neg');
+    xirrSubEl.textContent = state?.analytics ? 'not enough flows to converge' : 'analytics pending';
+  } else {
+    const sign = xirr >= 0 ? '+' : '';
+    xirrEl.textContent = sign + xirr.toFixed(2) + '%';
+    xirrEl.classList.remove('pl-pos', 'pl-neg');
+    xirrEl.classList.add(xirr >= 0 ? 'pl-pos' : 'pl-neg');
+    xirrSubEl.textContent = 'money-weighted, all external flows';
+  }
 }
 
 function renderWealthBuckets(summary) {

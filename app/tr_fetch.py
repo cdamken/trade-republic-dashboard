@@ -801,41 +801,115 @@ def _merge_into_csv(new_items: list[dict[str, Any]]) -> None:
     _write_csv(TX_CSV, existing_rows)
 
 
-def _row_from_tr_event(ev: dict[str, Any]) -> dict[str, Any] | None:
-    """Map one TR timeline event to a CSV row (or None to skip)."""
-    ev_type = ev.get("eventType") or ""
-    csv_type = EVENT_TYPE_MAP.get(ev_type)
-    if csv_type is None:
-        return None
+def _classify_corporate_action(title: str, subtitle: str) -> str:
+    """Decide whether SSP_CORPORATE_ACTION_CASH is a Dividend, Interest
+    (bond coupon) or Bond redemption (principal return at maturity).
 
+    TR uses a single eventType for all three concepts and only the
+    document title/subtitle discriminates. The PDF filename is also a
+    strong signal but happens out-of-band; here we work from whatever
+    text the event payload carries.
+
+    Defaults to "Dividend" for the regular stock-dividend case.
+    """
+    blob = (title + " " + subtitle).lower()
+    # Bond final maturity (principal return — NOT income).
+    if any(kw in blob for kw in ("endfälligkeit", "endgültige fälligkeit",
+                                  "fälligkeit", "maturity", "redemption",
+                                  "principal return", "ausbuchung")):
+        return "Bond redemption"
+    # Bond coupon / interest payment.
+    if any(kw in blob for kw in ("zinszahlung", "coupon", "interest payment",
+                                  "zinsgutschrift", "kuponzahlung")):
+        return "Interest"
+    return "Dividend"
+
+
+def _extract_isin(ev: dict[str, Any]) -> str:
+    """Best-effort ISIN extraction from a TR timeline event.
+
+    Tries multiple locations. ISIN format: 2-letter ISO country prefix
+    + 9 alphanumeric + 1 check digit = 12 chars.
+    """
+    def _looks_like_isin(s: str) -> bool:
+        return len(s) == 12 and s[:2].isalpha() and s[2:].isalnum()
+
+    # 1. Icon URL (logos/<ISIN>/v2) — handles most stock/ETF events.
+    icon = ev.get("icon") or ""
+    if "logos/" in icon:
+        for piece in icon.split("/"):
+            if _looks_like_isin(piece):
+                return piece
+
+    # 2. Direct fields TR sometimes exposes.
+    for key in ("instrumentId", "isin", "ISIN"):
+        v = ev.get(key)
+        if isinstance(v, str) and _looks_like_isin(v):
+            return v
+
+    # 3. Inside details / action / instrument sub-objects.
+    for parent_key in ("details", "action", "instrument"):
+        parent = ev.get(parent_key)
+        if isinstance(parent, dict):
+            for k in ("isin", "ISIN", "instrumentId", "subtitleText", "id"):
+                v = parent.get(k)
+                if isinstance(v, str) and _looks_like_isin(v):
+                    return v
+
+    return ""
+
+
+def _row_from_tr_event(ev: dict[str, Any]) -> dict[str, Any]:
+    """Map one TR timeline event to a CSV row.
+
+    NEVER returns None — events with eventTypes we don't recognize
+    become Type="Unknown" rows so the raw EventType stays visible in
+    the CSV. That way a Carlos-grep can spot new TR event types that
+    need to be added to EVENT_TYPE_MAP, instead of them disappearing
+    into the void.
+    """
+    ev_type = ev.get("eventType") or ""
+    title = (ev.get("title") or "").strip()
+    subtitle = (ev.get("subtitle") or "").strip()
+
+    csv_type = EVENT_TYPE_MAP.get(ev_type)
     if csv_type == "Trade":
-        csv_type = _classify_trade(ev)  # → "Buy" or "Sell" or None
-        if csv_type is None:
-            return None
+        # _classify_trade looks at amount sign; returns None on
+        # truly ambiguous (no sign + no buy/sell keyword), which we
+        # treat as Unknown so the row stays inspectable.
+        csv_type = _classify_trade(ev) or "Unknown"
+    elif csv_type == "Dividend":
+        # SSP_CORPORATE_ACTION_CASH catches stock dividends, bond
+        # coupons AND bond redemptions. Discriminate by text.
+        csv_type = _classify_corporate_action(title, subtitle)
+    elif csv_type is None:
+        csv_type = "Unknown"
 
     timestamp = ev.get("timestamp") or ev.get("eventTime") or ""
     amount = ev.get("amount") or {}
     value = amount.get("value") if isinstance(amount, dict) else amount
-    note = (ev.get("title") or ev.get("subtitle") or "").strip()
 
-    # ISIN is best-effort: TR's icon URL contains it (logos/<ISIN>/v2).
-    isin = ""
-    icon = ev.get("icon") or ""
-    if "logos/" in icon:
-        for piece in icon.split("/"):
-            if len(piece) == 12 and piece[:2].isalpha() and piece[2:].isalnum():
-                isin = piece
-                break
+    # Prefer the more informative of title/subtitle for the Note. For
+    # bond events the title is a generic "Feb 2025" while the subtitle
+    # carries "Zinszahlung" / "Endgültige Fälligkeit" — surface that.
+    if subtitle and (not title or title.endswith(" 2025") or
+                     title.endswith(" 2026") or title.endswith(" 2024") or
+                     title.endswith(" 2027") or title.endswith(" 2028")):
+        note = subtitle + (" — " + title if title else "")
+    else:
+        note = title or subtitle
+
+    isin = _extract_isin(ev)
 
     # Capture both the top-level eventType and any subType the timeline
-    # exposes — TR uses subType to discriminate between "promo credit",
-    # "referral bonus", "Tagesgeld+ interest", etc. all under the umbrella
-    # eventType=CREDIT. Without these the CSV can't tell us why a
-    # "Dividend" row has no ISIN.
+    # exposes. TR uses subType / subtitle to discriminate between
+    # "promo credit", "referral bonus", "Tagesgeld+ interest", etc.,
+    # all under generic umbrella eventTypes. We try multiple fields.
     ev_subtype = (
         ev.get("eventSubType")
         or ev.get("subEventType")
         or (ev.get("details") or {}).get("subType")
+        or subtitle  # last resort — at least preserves the bond-docs descriptor
         or ""
     )
 

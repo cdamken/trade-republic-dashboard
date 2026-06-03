@@ -180,8 +180,15 @@ EVENT_TYPE_MAP: dict[str, str] = {
     "TRADE_INVOICE":                       "Trade",
     "ORDER_EXECUTED":                      "Trade",
 
-    # --- Income (dividends, interest) -------------------------------------
+    # --- Income (dividends, interest, bond coupons) ------------------------
+    # Both SSP_CORPORATE_ACTION_CASH and its _NON_DIVIDEND variant route
+    # through _classify_corporate_action() (subtitle keyword inspection)
+    # so bond coupons land as "Interest" and bond maturities as
+    # "Bond redemption" — not all "Dividend". Carlos found the Aug 2040
+    # US Treasury coupon arriving as _NON_DIVIDEND with subtitle
+    # "Zinszahlung"; previously we silently dropped these.
     "SSP_CORPORATE_ACTION_CASH":           "Dividend",
+    "SSP_CORPORATE_ACTION_CASH_NON_DIVIDEND": "Dividend",
     "INTEREST_PAYOUT":                     "Interest",
     "INTEREST_PAYOUT_CREATED":             "Interest",
     # legacy
@@ -189,17 +196,30 @@ EVENT_TYPE_MAP: dict[str, str] = {
     "DIVIDEND":                            "Dividend",
     "ssp_corporate_action_invoice_cash":   "Dividend",
 
+    # --- Other cash events surfaced from comparing with pytr's catalog ----
+    # pytr stores all_events.json with the raw eventType for every item;
+    # these were observed in real-user data (Carlos's account) and have
+    # cash impact, so route them to the right CSV bucket.
+    "SAVINGS_PLAN_EXECUTED":               "Buy",     # legacy variant of TRADING_SAVINGSPLAN_EXECUTED
+    "CRYPTO_TRANSACTION_INCOMING":         "Deposit",
+    "CRYPTO_TRANSACTION_OUTGOING":         "Withdrawal",
+    "PAYMENT_INBOUND_CREDIT_CARD":         "Deposit",
+    "GIFTER_TRANSACTION":                  "Deposit", # gift received from another TR user
+    "STOCK_PERK_REFUNDED":                 "Deposit", # TR promo cash-back
+    "SSP_SECURITIES_TRANSFER_OUTGOING":    "Withdrawal", # outbound transfer to another broker
+
     # --- Intentionally NOT mapped -----------------------------------------
     # CARD_VERIFICATION (€1 pre-auth, refunded) — noise.
-    # TRADING_SAVINGSPLAN_EXECUTION_FAILED — informative, not a cash event.
-    # SSP_CORPORATE_ACTION_CASH_NON_DIVIDEND — spinoff cash with no
-    #   matching position credit; revisit if a user wants it surfaced.
+    # TRADING_SAVINGSPLAN_EXECUTION_FAILED / _PENDING — informative,
+    #   not a cash event.
+    # SSP_CORPORATE_ACTION_NO_CASH — by definition no cash.
     # All timelineActivityLog event types (ORDER_CANCELED,
     #   SSP_CORPORATE_ACTION_ACTIVITY/INFORMATIVE/INSTRUCTION/UPCOMING,
     #   CSX_CHAT_ACTIVITY, ORDER_EXPIRED, DOCUMENTS_ACCEPTED, ...) — these
-    #   are order lifecycle / informational, NOT financial events. We keep
-    #   fetching the topic in case a future TR change moves cash events
-    #   onto it, but for now drop everything we see.
+    #   are order lifecycle / informational, NOT financial events. With
+    #   the "never return None" fix in _row_from_tr_event these now appear
+    #   in the CSV as Type="Unknown" rather than being silently dropped —
+    #   visible for debugging but ignored by analytics.
 }
 
 

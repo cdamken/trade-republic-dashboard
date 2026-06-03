@@ -356,6 +356,10 @@ function stalenessHint(iso) {
 
 // Read last_update.date and re-render the chip in-place. Safe to call
 // repeatedly — does nothing if the chip element isn't in the DOM yet.
+// On secondary pages the chip carries both absolute + relative time
+// ("Updated 11:20 · 2h ago") because there's no separate "Last update"
+// line like Portfolio has in its subtitle. (2026-06-03 — Carlos thought
+// the secondary pages were stale because they only showed relative age.)
 async function refreshStalenessChip() {
   const chip = document.getElementById('last-update-age');
   if (!chip) return;
@@ -366,7 +370,15 @@ async function refreshStalenessChip() {
     if (!/\d{4}-\d{2}-\d{2}[ T]\d/.test(ts)) return;
     const s = stalenessHint(ts);
     if (!s) return;
-    chip.textContent = s.label;
+    const parseable = ts.replace(' ', 'T');
+    const d = new Date(parseable);
+    const today = new Date();
+    const sameDay = d.toDateString() === today.toDateString();
+    const abs = sameDay
+      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+        d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    chip.textContent = 'Updated ' + abs + ' · ' + s.label;
     chip.className = 'staleness-chip show ' + s.severity;
     chip.title = 'Snapshot fetched ' + ts;
   } catch (_) { /* keep prior state on error */ }

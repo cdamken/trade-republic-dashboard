@@ -646,8 +646,15 @@ CSV_COLUMNS = ["Date", "Type", "Value", "Note", "ISIN", "Shares",
                "Fees", "Taxes", "ISIN2", "Shares2"]
 
 
-async def _paginate_topic_on_ws(ws, topic: str, *, cutoff=None, max_pages: int = 200):
+async def _paginate_topic_on_ws(ws, topic: str, *, cutoff=None, max_pages: int = 2000):
     """Paginate a single TR timeline topic on an EXISTING WS connection.
+
+    max_pages is a safety cap against infinite loops — the natural
+    termination is `cursor is None`. 200 (the old value) was too low:
+    TR returns ~30 items/page, so 200 pages capped fetch at ~6000
+    events, which for an active account with savings plans + dividends
+    + interest covers only ~9 months of history. 2000 handles ~60,000
+    events, enough for 5+ years on any normal account.
 
     If `cutoff` is provided (a datetime), stops as soon as an item with
     timestamp < cutoff is seen — same semantics as fetch_since.

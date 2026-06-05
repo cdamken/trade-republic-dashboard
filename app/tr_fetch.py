@@ -208,6 +208,17 @@ EVENT_TYPE_MAP: dict[str, str] = {
     "STOCK_PERK_REFUNDED":                 "Deposit", # TR promo cash-back
     "SSP_SECURITIES_TRANSFER_OUTGOING":    "Withdrawal", # outbound transfer to another broker
 
+    # --- Order lifecycle events (non-cash, but useful in Ledger/audits) ---
+    # Carlos's account has ~370 of these across last year. Without these
+    # mappings they appeared as Type="Unknown" in the CSV. Now properly
+    # categorized so filters in the Ledger page can show / hide them.
+    "ORDER_CANCELED":                      "Cancelled",
+    "TRADING_ORDER_CANCELLED":             "Cancelled",
+    "ORDER_EXPIRED":                       "Expired",
+    "TRADING_ORDER_EXPIRED":               "Expired",
+    "TRADING_ORDER_REJECTED":              "Rejected",
+    "TRADING_ORDER_CREATED":               "Pending",  # limit orders waiting to fill
+
     # --- Intentionally NOT mapped -----------------------------------------
     # CARD_VERIFICATION (€1 pre-auth, refunded) — noise.
     # TRADING_SAVINGSPLAN_EXECUTION_FAILED / _PENDING — informative,

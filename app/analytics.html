@@ -429,17 +429,6 @@ async function init() {
       (avgNet >= 0 ? '+' : '−') + fmtEur0(Math.abs(avgNet));
     document.getElementById('cf-month-count').textContent = monthly.length + ' months';
 
-    const lastDepMonth = [...monthly].reverse().find(m => m.deposits > 0);
-    if (lastDepMonth) {
-      // Tile dropped in the 2026-05-28 refactor; guard for null in case
-      // the older template is still cached on a client.
-      const ldEl = document.getElementById('cf-last-deposit');
-      if (ldEl) {
-        ldEl.textContent = fmtEur0(lastDepMonth.deposits);
-        document.getElementById('cf-last-deposit-date').textContent = lastDepMonth.month;
-      }
-    }
-
   }
 
   // Capital invested over time chart removed 2026-06-01 — see analytics

@@ -1212,7 +1212,9 @@ async function updateData() {
       // If we never hit the overlay (fast cookies-alive path), don't bother
       // showing it just to take it down. The reload feedback below is enough.
       if (overlayShown) {
-        document.getElementById('progress-stage').textContent = '✓ Datos descargados — recargando…';
+        // Removed: getElementById('progress-stage') used to update a label
+      // that was dropped in the toast refactor. The page reloads in 800 ms
+      // below; the text would never be seen even if the element existed.
       }
       clearTimeout(overlayDelay);
       showStatus('ok', '✓ Updated — reloading');
@@ -1280,7 +1282,9 @@ async function submitMfa() {
   try {
     const r = await postUpdate(code, { full: fullReload });
     if (r.http === 200) {
-      document.getElementById('progress-stage').textContent = '✓ Datos descargados — recargando…';
+      // Removed: getElementById('progress-stage') used to update a label
+      // that was dropped in the toast refactor. The page reloads in 800 ms
+      // below; the text would never be seen even if the element existed.
       showStatus('ok', '✓ Updated — reloading');
       setTimeout(() => location.reload(), 800);
       return;  // leave overlay up during the brief reload window

@@ -335,10 +335,9 @@ tr:hover { background: rgba(255,255,255,0.02); }
 .update-btn.loading .icon { display: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.update-status { display: inline-block; margin-left: 12px; font-size: 13px;
-  padding: 4px 10px; border-radius: 6px; }
-.update-status.ok { background: rgba(74, 222, 128, 0.15); color: var(--green); }
-.update-status.err { background: rgba(248, 113, 113, 0.15); color: var(--red); }
+/* .update-status CSS removed — element was dropped in the 2026-05-28
+   toast refactor; showStatus() routes through #toast / #toast-title /
+   #toast-stage now. */
 
 /* ----- progress overlay ----- */
 /* Full-screen dim shown while a /update fetch is in flight. The MFA modal
@@ -781,16 +780,11 @@ function toggleSection(id) {
 
 // ============ Update flow (POST /update + MFA modal) ============
 const updateBtn = () => document.getElementById('update-btn');
-const updateStatus = () => document.getElementById('update-status');
 const setUpdateBtn = (loading, label) => {
   const b = updateBtn();
   if (!b) return;
   b.disabled = loading;
   b.classList.toggle('loading', loading);
-  // The button can be either `<button>🔄 Update Now</button>` (current
-  // top-bar) or the older `<button><span class="label">…</span></button>`
-  // shape. Support both — set .label if present, otherwise fall back to
-  // rewriting the whole button text (keeping the 🔄 emoji prefix).
   const labelEl = b.querySelector('.label');
   if (labelEl) {
     labelEl.textContent = label || 'Update Now';
@@ -798,12 +792,20 @@ const setUpdateBtn = (loading, label) => {
     b.textContent = '🔄 ' + (label || 'Update Now');
   }
 };
+// Status messages route through the toast (the dedicated #update-status
+// span was dropped in the 2026-05-28 refactor). Auto-hides 'ok' after 3s;
+// errors stay until the next showStatus() call replaces them.
 const showStatus = (kind, msg) => {
-  const s = updateStatus();
-  s.className = 'update-status ' + kind;
-  s.textContent = msg;
-  s.style.display = 'inline-block';
-  if (kind === 'ok') setTimeout(() => { s.style.display = 'none'; }, 5000);
+  const t = document.getElementById('toast');
+  const title = document.getElementById('toast-title');
+  const stage = document.getElementById('toast-stage');
+  if (!t || !title || !stage) return;
+  t.classList.remove('ok', 'err');
+  if (kind === 'ok' || kind === 'err') t.classList.add(kind);
+  title.textContent = msg || '';
+  stage.textContent = '';
+  t.classList.add('active');
+  if (kind === 'ok') setTimeout(() => t.classList.remove('active'), 3000);
 };
 
 async function postUpdate(mfaCode, opts) {
@@ -1128,11 +1130,10 @@ async function downloadDocs() {
     return;
   }
   const btn = document.getElementById('docs-btn');
-  const status = document.getElementById('update-status');
   const orig = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner" style="display:inline-block"></span> Downloading…';
-  if (status) { status.style.display = ''; status.className = 'update-status'; status.textContent = 'Walking timeline + downloading PDFs…'; }
+  showStatus('', 'Walking timeline + downloading PDFs…');
   try {
     const r = await fetch('/download_docs', {
       method: 'POST',
@@ -1149,7 +1150,7 @@ async function downloadDocs() {
       const summary = `${downloaded} new, ${skipped} already present` +
                       (errors ? `, ${errors} errors` : '') +
                       ` (of ${total} total)`;
-      if (status) { status.className = 'update-status ok'; status.textContent = '✓ ' + summary; }
+      showStatus('ok', '✓ ' + summary);
       alert(
         '✓ Documents downloaded\n\n' +
         summary + '\n\n' +
@@ -1158,7 +1159,7 @@ async function downloadDocs() {
         'Finder/Explorer or browse via your file manager.'
       );
     } else if (data.status === 'auth_required') {
-      if (status) { status.className = 'update-status err'; status.textContent = 'Session expired'; }
+      showStatus('err', 'Session expired');
       const want = confirm(
         'Your Trade Republic session expired.\n\n' +
         'Click OK to re-authenticate now (we will open the security-code\n' +
@@ -1169,14 +1170,14 @@ async function downloadDocs() {
         updateData();
       }
     } else if (data.status === 'rate_limited') {
-      if (status) { status.className = 'update-status err'; status.textContent = 'Rate limited'; }
+      showStatus('err', 'Rate limited');
       alert('Trade Republic rate-limited us. Wait a few minutes and try again.');
     } else {
-      if (status) { status.className = 'update-status err'; status.textContent = 'Download failed'; }
+      showStatus('err', 'Download failed');
       alert('Download failed: ' + (data.detail || data.status || 'unknown error'));
     }
   } catch (e) {
-    if (status) { status.className = 'update-status err'; status.textContent = 'Network error'; }
+    showStatus('err', 'Network error');
     alert('Download error: ' + e.message);
   } finally {
     btn.disabled = false;

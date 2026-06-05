@@ -12,13 +12,6 @@ ROOT = Path(__file__).resolve().parent.parent
 
 ALLOWLIST = {
     'last-update-age', 'update-btn',
-    # Defensively null-guarded throughout the codebase. The element was
-    # dropped from the template during the toast refactor; every
-    # `getElementById('update-status')` call site is wrapped in
-    # `if (status) { ... }`, so this is technically dead code but it
-    # doesn't crash. TODO(carlos): clean up the showStatus()/updateStatus()
-    # helpers and route through #toast (same as TR-owncloud@v0.1.34).
-    'update-status',
 }
 
 

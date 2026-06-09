@@ -56,6 +56,22 @@ El orden dentro de cada sección es por impacto estimado.
 
 ## 2. Features (puerto desde GBM)
 
+- [ ] **Per-page CSV export** (idea portada desde Scalable-Capital-Dashboard,
+  sesión 2026-06-06). Botón "↓ Export CSV" en los controles de cada página:
+  - `/export/orders.csv` — date, side, type, isin, security, quantity, amount_eur, status
+  - `/export/ledger.csv` — date, type, description, related_isin, amount_eur, currency, status
+  - `/export/dividends.csv` — date, security, isin, amount_eur, currency, status
+  - `/export/holdings.csv` — group, name, isin, wkn, type, quantities, fifo_price, current_price, value_eur
+
+  GBM ya tiene un CSV agregado (`/export/transactions.csv` para SAT) que
+  es excelente para impuestos pero menos util para análisis ad-hoc. La
+  variante per-página resuelve el caso "quiero pegar mis órdenes en una
+  spreadsheet sin pelear con 13 columnas". Implementación en
+  `Scalable-Capital-Dashboard/app/server.py::_handle_export()` —
+  copy verbatim adaptando los campos al schema TR (eventType /
+  cashTransactionType en TR son distintos a Scalable).
+
+
 - [x] **Página Órdenes dedicada** — implementado 2026-06-02 en
   `/app/orders.html`. Tabla con filtros por side (Buy/Sell), búsqueda
   por security/ISIN, filtro de mes. Cards: total trades, total

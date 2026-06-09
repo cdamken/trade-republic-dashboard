@@ -124,7 +124,7 @@ The dashboard consumes **two datasets** from TR with different characteristics:
       → report: "Transactions: 14,211 → 14,225  (+14 new)"
 
 3. Process:
-   - parse_pytr_output.py  → DATA/portfolio.json
+   - tr_fetch.py           → DATA/portfolio.json, account_transactions.csv
    - analyze_analytics.py  → DATA/analytics.json + DATA/net_worth_history.json
 
 4. Cleanup auxiliary files (.DS_Store, *.tmp, *.partial)
@@ -176,13 +176,12 @@ trade-republic-dashboard/
 │
 ├── app/                     ← project code (versioned)
 │   ├── server.py                 HTTP server (port 8085) + POST /update
-│   ├── tr_fetch.py               pytr wrapper with MFA-aware exit codes
+│   ├── tr_fetch.py               tr-api wrapper with MFA-aware exit codes
+│   ├── _shared.js                Formatters + top-bar / staleness chip injection
+│   ├── _update_flow.js           MFA modal + toast (loaded on every page)
 │   ├── index.html                Portfolio page (search/filter/sort)
 │   ├── analytics.html            Analytics page (dividends, cash flow, allocation, history)
-│   ├── parse_pytr_output.py      Parser: portfolio_raw.txt → DATA/portfolio.json
-│   ├── analyze_analytics.py      Calculates dividends, allocation, cash flow, history
-│   ├── reconstruct_history.py    Reconstructs net worth history from CSV
-│   └── extract_tr.js             (legacy) DOM extractor for the TR web app
+│   └── analyze_analytics.py      Calculates dividends, allocation, cash flow, history
 │
 └── DATA/                    ← downloaded / generated / state (gitignored)
     ├── portfolio_raw.txt         Raw `pytr portfolio` output

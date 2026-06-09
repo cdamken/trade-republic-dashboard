@@ -137,11 +137,10 @@ app/
 ├── server.py                    HTTP server + /update flow + MFA modal logic
 ├── tr_fetch.py                  tr-api → CSV/JSON writer (one-WS for both topics)
 ├── analyze_analytics.py         CSV → analytics.json + net_worth_history.json
-├── extract_tr.js                Browser-extension prototype (unused)
+├── _shared.js                   formatters + chrome injection
+├── _update_flow.js              MFA flow + toast (loaded on every page)
 ├── index.html                   Portfolio page
-├── analytics.html               Cash-flow / dividends / allocation / net-worth charts
-├── parse_pytr_output.py         Legacy parser (pre-tr-api era)
-└── parse_tr_export.py           Legacy
+└── analytics.html               Cash-flow / dividends / allocation / net-worth charts
 DATA/                            Generated; gitignored
 ├── portfolio.json
 ├── portfolio_raw.json

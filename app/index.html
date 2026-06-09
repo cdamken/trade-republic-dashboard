@@ -489,7 +489,10 @@ td code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   </div>
 </div>
 
-<p class="subtitle">Data extracted via <a href="https://github.com/cdamken/tr-api" target="_blank" style="color:var(--muted); text-decoration:underline;">tr-api</a> (WebSocket TR). <span id="ts"></span> <span id="last-update-age" class="staleness-chip"></span></p>
+<!-- The freshness chip lives in the top-bar .actions now (same place as
+     every other page) — refreshStalenessChip() in this file's <script>
+     injects + refreshes it. -->
+<p class="subtitle">Data extracted via <a href="https://github.com/cdamken/tr-api" target="_blank" style="color:var(--muted); text-decoration:underline;">tr-api</a> (WebSocket TR).</p>
 
 <!-- ============ MFA Modal ============ -->
 <div id="mfa-modal" class="modal-backdrop" onclick="if(event.target===this)closeMfaModal()">
@@ -1350,26 +1353,40 @@ function stalenessHint(iso) {
 // stays fresh — and after a cross-tab BroadcastChannel signal so other
 // tabs catch updates from this one.
 async function refreshStalenessChip() {
-  const tsEl   = document.getElementById('ts');
-  const chipEl = document.getElementById('last-update-age');
-  if (!chipEl) return;
+  // Find or create the chip in the top-bar .actions — same place every
+  // other page uses (via _update_flow.js). Label "Updated HH:MM · X ago".
+  let chip = document.getElementById('last-update-age');
+  if (!chip) {
+    const actions = document.querySelector('.top-bar .actions');
+    if (!actions) return;
+    chip = document.createElement('span');
+    chip.id = 'last-update-age';
+    chip.className = 'staleness-chip';
+    const upd = document.getElementById('update-btn');
+    if (upd) actions.insertBefore(chip, upd);
+    else actions.appendChild(chip);
+  }
   let fetchedAt = null;
   try {
     const tsRes = await fetch('../DATA/last_update.date?t=' + Date.now());
     if (tsRes.ok) fetchedAt = (await tsRes.text()).trim();
   } catch (_) { /* keep prior state on error */ }
   if (fetchedAt && /\d{4}-\d{2}-\d{2}[ T]\d/.test(fetchedAt)) {
+    const stale = stalenessHint(fetchedAt);
+    if (!stale) return;
     const parseable = fetchedAt.replace(' ', 'T');
     const d = new Date(parseable);
-    if (tsEl) tsEl.textContent = 'Last update: ' + d.toLocaleString();
-    const stale = stalenessHint(fetchedAt);
-    if (stale) {
-      chipEl.textContent = stale.label;
-      chipEl.className = 'staleness-chip show ' + stale.severity;
-    }
+    const today = new Date();
+    const sameDay = d.toDateString() === today.toDateString();
+    const abs = sameDay
+      ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' ' +
+        d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    chip.textContent = 'Updated ' + abs + ' · ' + stale.label;
+    chip.className = 'staleness-chip show ' + stale.severity;
+    chip.title = 'Snapshot fetched ' + fetchedAt;
   } else {
-    if (tsEl) tsEl.textContent = 'Last update: ' + new Date().toLocaleString();
-    chipEl.className = 'staleness-chip';
+    chip.className = 'staleness-chip';
   }
 }
 

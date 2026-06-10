@@ -233,6 +233,19 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     # ------------------------------------------------------------------ GET
     def do_GET(self):
+        # Per-page CSV exports — focused subsets of account_transactions.csv
+        # and portfolio.json, one file per dashboard page. The button on
+        # each page is a plain `<a href="/export/X.csv" download>` so no
+        # JS is needed to drive them.
+        if self.path == "/export/orders.csv":
+            return self._export_orders_csv()
+        if self.path == "/export/ledger.csv":
+            return self._export_ledger_csv()
+        if self.path == "/export/dividends.csv":
+            return self._export_dividends_csv()
+        if self.path == "/export/holdings.csv":
+            return self._export_holdings_csv()
+
         if self.path == "/setup_status":
             phone = None
             if PYTR_CREDS.is_file():
@@ -257,7 +270,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # (e.g. /Dashboard/, /foo, /typo) to the portfolio page instead
         # of a bare 404 — easier when the user mistypes or pastes a
         # nonsense URL like `localhost:8085/Dashboard/`.
-        ALLOWED_PREFIXES = ("/app/", "/DATA/")
+        ALLOWED_PREFIXES = ("/app/", "/DATA/", "/export/")
         if self.path in ("/", "/app", "/app/") or not (
             self.path.startswith(ALLOWED_PREFIXES)
             or self.path in ("/setup_status", "/settings")
@@ -728,6 +741,144 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 "exit_code": exit_code,
                 "detail": envelope.get("message", "")[:500],
             })
+
+    # ---- CSV exports ---------------------------------------------------
+    # Each endpoint is a focused subset of account_transactions.csv or
+    # portfolio.json — gives the user exactly the columns visible on the
+    # corresponding dashboard page. Lighter than the full CSV download
+    # you'd give to an accountant.
+
+    # eventType filters for each export. EVENT_TYPE_MAP in tr_fetch.py
+    # is the authoritative list — we mirror the categories here in plain
+    # tuples so the server doesn't import tr_fetch (which pulls tr-api).
+    _BUY_SELL_EVENT_TYPES = (
+        "TRADING_TRADE_EXECUTED",
+        "TRADING_SAVINGSPLAN_EXECUTED",
+        "SPARE_CHANGE_AGGREGATE",
+        "SAVEBACK_AGGREGATE",
+        "CRYPTO_BUY_EXECUTED",
+        "CRYPTO_SELL_EXECUTED",
+    )
+    _DIVIDEND_EVENT_TYPES = (
+        "SSP_CORPORATE_ACTION_CASH",
+        "ssp_corporate_action_invoice_cash",  # legacy lowercase variant
+    )
+
+    def _send_csv(self, filename: str, rows):
+        """Stream a list-of-lists as text/csv with a download disposition."""
+        import csv as _csv
+        import io as _io
+        buf = _io.StringIO()
+        w = _csv.writer(buf, quoting=_csv.QUOTE_MINIMAL)
+        for row in rows:
+            w.writerow(row)
+        body = buf.getvalue().encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/csv; charset=utf-8")
+        self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _read_account_transactions(self):
+        """Generator yielding (date, type, value, note, isin, shares, fees,
+        taxes, isin2, shares2, event_type, event_subtype) tuples from
+        DATA/account_transactions.csv. Returns [] silently if missing."""
+        import csv as _csv
+        path = DATA_DIR / "account_transactions.csv"
+        if not path.is_file():
+            return
+        with path.open("r", encoding="utf-8", newline="") as f:
+            r = _csv.reader(f, delimiter=";")
+            header = next(r, None)
+            if not header:
+                return
+            for row in r:
+                # Pad short rows to 12 cols so callers can index safely.
+                row = (row + [""] * 12)[:12]
+                yield row
+
+    def _export_orders_csv(self):
+        rows = [["date", "side", "eventType", "isin", "security",
+                 "quantity", "amount_eur", "status"]]
+        for r in self._read_account_transactions():
+            date, typ, val, note, isin, shares, _fees, _taxes, _i2, _s2, ev, sub = r
+            # Buy/sell heuristic: known event type OR Type column == "Buy"/"Sell".
+            is_trade = (ev in self._BUY_SELL_EVENT_TYPES) or typ in ("Buy", "Sell")
+            if not is_trade:
+                continue
+            # Side: prefer the explicit Type column; fall back to amount sign
+            # (negative = Buy, positive = Sell — TR convention).
+            if typ in ("Buy", "Sell"):
+                side = typ
+            else:
+                try:
+                    side = "Buy" if float(val or 0) < 0 else "Sell"
+                except ValueError:
+                    side = ""
+            status = sub or "executed"
+            rows.append([date, side, ev, isin, note, shares, val, status])
+        self._send_csv("orders.csv", rows)
+
+    def _export_ledger_csv(self):
+        rows = [["date", "eventType", "category", "description",
+                 "related_isin", "amount_eur", "status"]]
+        # Category mapping: same categories the dashboard's Ledger page shows.
+        WITHDRAWAL_PREFIX = "BANK_TRANSACTION_OUTGOING"
+        DEPOSIT_TYPES = ("BANK_TRANSACTION_INCOMING", "CARD_REFUND")
+        for r in self._read_account_transactions():
+            date, typ, val, note, isin, _sh, _f, _t, _i2, _s2, ev, sub = r
+            if ev in self._BUY_SELL_EVENT_TYPES or typ in ("Buy", "Sell"):
+                cat = "trade"
+            elif ev in self._DIVIDEND_EVENT_TYPES or typ == "Dividend":
+                cat = "dividend"
+            elif ev in DEPOSIT_TYPES or typ == "Deposit":
+                cat = "deposit"
+            elif ev.startswith(WITHDRAWAL_PREFIX) or typ == "Withdrawal":
+                cat = "withdrawal"
+            elif ev == "CARD_TRANSACTION" or typ == "Removal":
+                cat = "card_spending"
+            elif ev == "SSP_TAX_CORRECTION" or typ == "Tax Refund":
+                cat = "tax_refund"
+            elif ev.startswith("INTEREST_PAYOUT") or typ == "Interest":
+                cat = "interest"
+            else:
+                cat = "other"
+            rows.append([date, ev, cat, note, isin, val, sub or ""])
+        self._send_csv("ledger.csv", rows)
+
+    def _export_dividends_csv(self):
+        rows = [["date", "security", "isin", "amount_eur", "currency", "status"]]
+        for r in self._read_account_transactions():
+            date, typ, val, note, isin, _sh, _f, _t, _i2, _s2, ev, sub = r
+            if ev in self._DIVIDEND_EVENT_TYPES or typ == "Dividend":
+                rows.append([date, note, isin, val, "EUR", sub or "credited"])
+        self._send_csv("dividends.csv", rows)
+
+    def _export_holdings_csv(self):
+        rows = [["name", "isin", "type", "qty", "fifo",
+                 "current_price", "value_eur", "daily_pnl"]]
+        path = DATA_DIR / "portfolio.json"
+        if not path.is_file():
+            self._send_csv("holdings.csv", rows)
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            self._send_csv("holdings.csv", rows)
+            return
+        for p in (data.get("all_positions") or []):
+            rows.append([
+                p.get("name") or p.get("security") or "",
+                p.get("isin") or "",
+                p.get("type") or p.get("category") or "",
+                p.get("qty") or p.get("quantity") or "",
+                p.get("avg_cost") or p.get("fifo_avg_cost") or "",
+                p.get("current_price") or "",
+                p.get("net_value_eur") or "",
+                p.get("daily_pnl_eur") or p.get("pl_eur") or "",
+            ])
+        self._send_csv("holdings.csv", rows)
 
     # ---- helpers -------------------------------------------------------
     def _json(self, code, payload):

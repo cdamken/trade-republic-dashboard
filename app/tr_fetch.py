@@ -750,7 +750,11 @@ def fetch_transactions(client: TrClient, force_full: bool) -> None:
     if not (force_full or not TX_CSV.exists() or not LAST_UPDATE_FILE.exists()):
         # Incremental path — uses a cutoff stop predicate.
         try:
-            last_str = LAST_UPDATE_FILE.read_text(encoding="utf-8").strip().split()[0]
+            # Accept legacy "2026-06-10 09:21:43" AND new ISO
+            # "2026-06-10T09:21:43Z" — only the YYYY-MM-DD prefix
+            # matters for the cutoff date.
+            raw = LAST_UPDATE_FILE.read_text(encoding="utf-8").strip()
+            last_str = raw.split('T')[0].split()[0]
             cutoff = datetime.strptime(last_str, "%Y-%m-%d").replace(tzinfo=timezone.utc) - timedelta(days=3)
         except Exception:
             cutoff = None
@@ -1038,8 +1042,16 @@ def main() -> None:
     # Full timestamp (date + time) so the UI can show a staleness chip
     # ("hace N min", color-coded). The incremental-fetch logic above only
     # cares about the date part — `.split()[0]` extracts it on read.
+    #
+    # Written in ISO 8601 with explicit `Z` (UTC). Previously this was
+    # `datetime.now()` (naive local-of-server) which on a UTC server
+    # gets parsed by browser JS as the USER's local timezone — Carlos
+    # saw "Updated 07:21 AM · 2 h ago" while it was 09:21 his time.
+    # The `Z` marker tells `new Date()` to parse as UTC; the chip's
+    # `toLocaleTimeString()` then renders in the user's TZ correctly.
     LAST_UPDATE_FILE.write_text(
-        datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n", encoding="utf-8"
+        datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ") + "\n",
+        encoding="utf-8",
     )
 
     print("Running analytics…", flush=True)

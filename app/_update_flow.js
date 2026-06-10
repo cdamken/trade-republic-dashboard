@@ -170,7 +170,10 @@ function showToast(stage, kind) {
   t.classList.remove('ok', 'err');
   if (kind) t.classList.add(kind);
   const stageEl = $('toast-stage');
-  if (stageEl) stageEl.textContent = stage;
+  // Skip the DOM write when the text hasn't changed — the 500 ms
+  // progress poll calls this with the same stage for minutes at a
+  // time during long fetches.
+  if (stageEl && stageEl.textContent !== stage) stageEl.textContent = stage;
   t.classList.add('active');
 }
 function setToastTitle(title) {
@@ -431,6 +434,14 @@ function broadcastUpdateComplete() {
 }
 
 function init() {
+  // Re-entry guard: if init() runs twice (script double-loaded, or a
+  // page that calls it manually after DOMContentLoaded already fired),
+  // every addEventListener below would duplicate — the MFA input
+  // validation would run twice per keystroke and updateData would
+  // fire two parallel /update POSTs per click.
+  if (window.__updateFlowInitialized) return;
+  window.__updateFlowInitialized = true;
+
   injectStylesIfMissing();
   injectModalsIfMissing();
   injectStalenessChip();

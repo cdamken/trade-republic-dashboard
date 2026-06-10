@@ -64,21 +64,57 @@ function monthLabel(k) {
   if (!k) return '';
   const [y, m] = k.split('-');
   const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return `${names[parseInt(m, 10) - 1]} ${y}`;
+  // Clamp to 0..11 — a malformed key like "2026-13" would otherwise
+  // index past the array and render "undefined 2026".
+  const idx = Math.max(0, Math.min(11, parseInt(m, 10) - 1));
+  return `${names[idx]} ${y}`;
 }
 
 // ----------------------------------------------------------------------
-// CSV parser tolerant to the TR account_transactions.csv shape:
+// CSV parser for the TR account_transactions.csv shape:
 // Date;Type;Value;Note;ISIN;Shares;Fees;Taxes;ISIN2;Shares2
 // Returns array of row objects.
+//
+// Quote-aware: Python's csv writer (QUOTE_MINIMAL, delimiter=';')
+// wraps any field containing `;` or `"` in double quotes, escaping
+// embedded quotes by doubling. A note like `Dividend; gross €1000`
+// arrives as `"Dividend; gross €1000"` — a naive split(';') would
+// shear that row apart. This parser walks the line char-by-char and
+// only splits on unquoted semicolons.
 // ----------------------------------------------------------------------
+function splitCsvLine(line) {
+  const fields = [];
+  let cur = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; }  // escaped quote
+        else inQuotes = false;
+      } else {
+        cur += c;
+      }
+    } else if (c === '"' && cur === '') {
+      inQuotes = true;
+    } else if (c === ';') {
+      fields.push(cur);
+      cur = '';
+    } else {
+      cur += c;
+    }
+  }
+  fields.push(cur);
+  return fields;
+}
+
 function parseCsv(text) {
   const lines = text.replace(/\r\n/g, '\n').split('\n').filter(Boolean);
   if (lines.length === 0) return [];
-  const header = lines[0].split(';');
+  const header = splitCsvLine(lines[0]);
   const out = [];
   for (let i = 1; i < lines.length; i++) {
-    const fields = lines[i].split(';');
+    const fields = splitCsvLine(lines[i]);
     if (fields.length < header.length) continue;
     const row = {};
     for (let j = 0; j < header.length; j++) row[header[j]] = fields[j];

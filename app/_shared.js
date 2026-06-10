@@ -21,10 +21,28 @@ function fmtEUR(n) {
   });
 }
 
-// Sign-aware EUR: "+€1.23" / "-€1.23" / "€0.00" depending on the value's sign.
+// Sign-aware EUR: "+€1.23" / "−€1.23" / "+€0.00" — explicit sign on
+// BOTH positives and negatives. For deltas / net cash flows where the
+// sign is the headline information.
+//
+// Uses unicode minus (U+2212). Fixed 2026-06-10 (was returning
+// negatives WITHOUT any sign, relying on `.red` CSS class to
+// communicate negativity — colour-blind-hostile + misleading on
+// copy-paste).
 function fmtSignedEUR(n) {
   const v = Number(n) || 0;
-  return (v >= 0 ? '+' : '') + fmtEUR(Math.abs(v));
+  if (v < 0) return '−' + fmtEUR(Math.abs(v));
+  return '+' + fmtEUR(v);
+}
+
+// EUR with minus on negatives but NO sign on positives: "€1.23" /
+// "−€1.23" / "€0.00". For values that are conventionally positive
+// (dividend totals, balances) where a "+" prefix would be visual
+// noise but a missing "−" on a refund would be wrong.
+function fmtEURWithMinus(n) {
+  const v = Number(n) || 0;
+  if (v < 0) return '−' + fmtEUR(Math.abs(v));
+  return fmtEUR(v);
 }
 
 // ----------------------------------------------------------------------

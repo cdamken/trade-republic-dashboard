@@ -249,6 +249,16 @@ tr:hover { background: rgba(255,255,255,0.02); }
     <div class="value" id="card-issuers">—</div>
     <div class="delta" id="card-issuers-detail">unique ISINs</div>
   </div>
+  <div class="summary-card">
+    <div class="label">Forward 12-mo dividends</div>
+    <div class="value green" id="card-fwd-div">—</div>
+    <div class="delta" id="card-fwd-div-sub">projection from last 12 months</div>
+  </div>
+  <div class="summary-card" title="Forward 12-month dividend ÷ total cost basis. Unlike market yield (÷ current price), this is the income you earn per euro you actually paid. Same metric as GBM/SC.">
+    <div class="label">Yield on cost</div>
+    <div class="value" id="card-yoc" style="color: var(--blue);">—</div>
+    <div class="delta">forward dividends ÷ cost basis</div>
+  </div>
 </div>
 
 <div class="note">
@@ -394,6 +404,23 @@ async function loadDividends() {
     }
     const d = await r.json();
     const div = d.dividends || {};
+
+    // Income forecast (moved here from Analytics — dividend metrics live
+    // with dividends). forward_12mo + yield_on_cost come from analytics.json.
+    const fwd = div.forward_12mo;
+    const fwdEl = document.getElementById('card-fwd-div');
+    const fwdSub = document.getElementById('card-fwd-div-sub');
+    if (fwd != null) {
+      fwdEl.textContent = '€' + fwd.toLocaleString(undefined, { maximumFractionDigits: 0 });
+      fwdSub.textContent = 'from ' + (div.forward_12mo_payments_used || 0) + ' payments · ' +
+                           (div.forward_12mo_basis_days || 0) + ' days basis';
+    } else {
+      fwdEl.textContent = '—';
+      fwdSub.textContent = 'need ≥90 days of dividend history';
+    }
+    document.getElementById('card-yoc').textContent =
+      div.yield_on_cost != null ? div.yield_on_cost.toFixed(2) + '%' : '—';
+
     state.rows = div.all_payments || div.recent || [];
     // Date range — first/last from rows
     const dates = state.rows.map(p => p.date).filter(Boolean).sort();

@@ -242,20 +242,10 @@ td { padding: 16px; border-bottom: 1px solid var(--border); font-size: 16px; }
     <strong>Lifetime P/L</strong> = Current value + Card spending − Net capital in TR − Investment income. Pure price appreciation on the capital you've committed.
   </div>
 
-  <!-- Income forecast (Forward 12mo dividends + Yield on cost). 2026-06-01 —
-       replaces Trading totals tiles which just repeated buys/sells totals. -->
-  <h2 style="margin-top: 32px;">Income forecast</h2>
+  <!-- Trading totals. Forward dividends + Yield on cost moved to the
+       Dividends page (dividend metrics live with dividends). -->
+  <h2 style="margin-top: 32px;">Trading totals</h2>
   <div class="cf-grid">
-    <div class="cf-tile in">
-      <div class="label">Forward 12-mo dividends</div>
-      <div class="value" id="cf-fwd-div">—</div>
-      <div class="sub" id="cf-fwd-div-sub">Projection from last 12 months</div>
-    </div>
-    <div class="cf-tile">
-      <div class="label">Yield on cost</div>
-      <div class="value" id="cf-yoc" style="color: var(--blue);">—</div>
-      <div class="sub">Forward dividends ÷ total cost basis</div>
-    </div>
     <div class="cf-tile">
       <div class="label">Total stock purchases</div>
       <div class="value" id="cf-buys">€0</div>
@@ -400,22 +390,7 @@ async function init() {
     document.getElementById('cf-pl-tile').classList.add(pl >= 0 ? 'pl-pos' : 'pl-neg');
   }
 
-  // Income forecast (forward 12mo dividends + yield on cost)
-  const div = data.dividends || {};
-  const fwd = div.forward_12mo;
-  const fwdEl = document.getElementById('cf-fwd-div');
-  const fwdSub = document.getElementById('cf-fwd-div-sub');
-  if (fwd != null) {
-    fwdEl.textContent = '€' + fwd.toLocaleString(undefined, {maximumFractionDigits: 0});
-    fwdEl.style.color = 'var(--green)';
-    fwdSub.textContent = 'From ' + (div.forward_12mo_payments_used || 0) + ' payments · ' +
-                         (div.forward_12mo_basis_days || 0) + ' days basis';
-  } else {
-    fwdEl.textContent = '—';
-    fwdSub.textContent = 'Need ≥90 days of Dividend history';
-  }
-  document.getElementById('cf-yoc').textContent =
-    div.yield_on_cost != null ? div.yield_on_cost.toFixed(2) + '%' : '—';
+  // Forward dividends + yield on cost moved to the Dividends page.
   document.getElementById('cf-buys').textContent = fmtEur0(cf.buys?.total || 0);
   document.getElementById('cf-buys-count').textContent = (cf.buys?.count || 0).toLocaleString();
   document.getElementById('cf-sells').textContent = fmtEur0(cf.sells?.total || 0);

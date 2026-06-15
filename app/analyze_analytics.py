@@ -171,39 +171,54 @@ def fetch_benchmark_monthly(symbol, start_date, end_date, cache_path=None):
         return []
 
 
-def replay_against_benchmark(monthly_flows, bench_history):
-    """Simulate buying the benchmark with the user's external cash flows.
+def replay_against_benchmark(daily_cost_basis, bench_history):
+    """Replay the user's DAILY committed-capital trajectory against a
+    benchmark — one value per calendar day.
 
-    monthly_flows: list of {month: 'YYYY-MM', deposits, tax_refunds, removals,
-                            withdrawals, net_flow}
-    bench_history: list of {date, close} from fetch_benchmark_monthly
+    This mirrors gbm-dashboard's JS ``_replayBenchmark`` so all three trios
+    share one algorithm. The previous version walked MONTHLY flows and keyed
+    the benchmark by ``YYYY-MM``, which collapsed the line into monthly
+    stair-steps (the "mal hecha" rendering Carlos flagged). Yahoo already
+    gives us daily closes (interval=1d); we now use them.
 
-    Returns list of {date: 'YYYY-MM-DD', value: float} — what the user's
-    capital would be worth today if every external inflow had bought the
-    benchmark at that month's close and every outflow had sold proportionally.
+    daily_cost_basis: list of {date: 'YYYY-MM-DD', value: float} — the SAME
+        cumulative cost-basis series the user's line plots (apples-to-apples).
+    bench_history:    list of {date, close} daily closes.
+
+    On each day the cost basis changes, "buy"/"sell" the delta worth of
+    benchmark units at that day's last known close, then emit units*close
+    every day — carrying the last close across weekends/holidays so the line
+    is smooth instead of stepped.
     """
-    if not monthly_flows or not bench_history:
+    if not daily_cost_basis or not bench_history:
         return []
-    bench_by_month = {h['date'][:7]: h['close'] for h in bench_history}
+    bench_by_day = {h['date']: h['close'] for h in bench_history}
+    bench_dates = sorted(bench_by_day.keys())
+    if not bench_dates:
+        return []
+    cb_by_day = {h['date']: h['value'] for h in daily_cost_basis}
+    user_dates = sorted(cb_by_day.keys())
+    cur = datetime.fromisoformat(user_dates[0]).date()
+    end = max(datetime.fromisoformat(bench_dates[-1]).date(), datetime.now().date())
+
     units = 0.0
+    prev_cb = None
+    last_close = None
     out = []
-    for f in monthly_flows:
-        m = f['month']
-        close = bench_by_month.get(m)
-        if close is None or close <= 0:
-            # No price for this month — skip flow, carry units forward.
-            if out:
-                out.append({"date": m + "-01", "value": out[-1]['value']})
-            continue
-        net = float(f.get('net_flow', 0) or 0)
-        if net != 0:
-            units += net / close
-        value = round(units * close, 2)
-        out.append({"date": m + "-01", "value": value})
-    # Final marker at the last benchmark close (today-ish).
-    if bench_history and units > 0:
-        last = bench_history[-1]
-        out.append({"date": last['date'], "value": round(units * last['close'], 2)})
+    while cur <= end:
+        ds = cur.isoformat()
+        c = bench_by_day.get(ds)
+        if c is not None:
+            last_close = c
+        if ds in cb_by_day:
+            cb = cb_by_day[ds]
+            delta = cb if prev_cb is None else (cb - prev_cb)
+            if delta != 0 and last_close and last_close > 0:
+                units += delta / last_close
+            prev_cb = cb
+        if last_close and last_close > 0 and units != 0:
+            out.append({"date": ds, "value": round(units * last_close, 2)})
+        cur += timedelta(days=1)
     return out
 
 
@@ -605,13 +620,14 @@ def process_analytics():
             ("VUSA.AS", "S&P 500",     "#34d399"),  # emerald
             ("CNDX.AS", "Nasdaq 100",  "#c084fc"),  # iShares Nasdaq 100 UCITS, EUR
         ]
-        # Replay uses net_invested (buys − sells) so the comparison is
-        # apples-to-apples with the user's line (cumulative buys − sells).
-        replay_input = [{"month": m["month"], "net_flow": m["net_invested"]} for m in cf["monthly"]]
+        # Replay the SAME daily cost-basis series the user's line plots
+        # (cumulative buys − sells), so the comparison is apples-to-apples
+        # AND smooth day-by-day instead of monthly stair-steps.
+        daily_cb = analytics_data.get("history", [])
         for sym, label, color in BENCHMARKS:
             cache_path = cache_dir / (sym.replace(".", "_") + ".json")
             bench_history = fetch_benchmark_monthly(sym, start_d, today_d, cache_path=cache_path)
-            replayed = replay_against_benchmark(replay_input, bench_history) if bench_history else []
+            replayed = replay_against_benchmark(daily_cb, bench_history) if bench_history else []
             if replayed:
                 benchmarks_out.append({
                     "symbol":  sym,

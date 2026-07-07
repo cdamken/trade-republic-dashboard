@@ -758,6 +758,11 @@ const fmt = (n, d=2) => n.toLocaleString('en-US', { minimumFractionDigits: d, ma
 const fmtEUR = (n) => '€' + fmt(n);
 const fmtPct = (n) => (n >= 0 ? '+' : '') + fmt(n, 1) + '%';
 
+// HTML-escape broker-supplied strings before innerHTML interpolation
+// (self-XSS hardening). Defined locally: this page doesn't load
+// _shared.js (its top-level const fmtEUR would collide with this file's).
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
 // Quantity formatter that adapts decimal precision to the instrument
 // class. Crypto needs many decimals (you can own 0.029624 ETH); whole-
 // share stocks look cleaner as integers ("12" instead of "12.0000");
@@ -1438,7 +1443,7 @@ async function load() {
     const w = document.getElementById('warning');
     w.style.display = 'block';
     w.innerHTML = '⚠️ <strong>Positions with missing price:</strong> ' +
-      state.data.zero_value_positions.map(p => p.name).join(', ');
+      state.data.zero_value_positions.map(p => esc(p.name)).join(', ');
   }
 
   document.getElementById('total-count').textContent = state.data.positions_with_value;
@@ -1477,8 +1482,8 @@ function rowHTML(p) {
   const safeName = String(p.name || '').replace(/['"]/g, '');
   const plCls = (p.pl_eur || 0) >= 0 ? 'pl-pos' : 'pl-neg';
   return `<tr>
-    <td title="${p.name}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${p.name}</a></td>
-    <td><code>${p.isin}</code>${externalLinks(p.isin)}</td>
+    <td title="${esc(p.name)}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${esc(p.name)}</a></td>
+    <td><code>${esc(p.isin)}</code>${externalLinks(p.isin)}</td>
     <td class="num">${fmtQty(p.quantity, p.category)}</td>
     <td class="num">${fmtEUR(p.avg_cost)}</td>
     <td class="num">${fmtEUR(p.current_price)}</td>
@@ -1494,8 +1499,8 @@ function shortRow(p) {
   const safeName = String(p.name || '').replace(/['"]/g, '');
   const plCls = (p.pl_eur || 0) >= 0 ? 'pl-pos' : 'pl-neg';
   return `<tr>
-    <td title="${p.name}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${p.name}</a></td>
-    <td><code>${p.isin}</code>${externalLinks(p.isin)}</td>
+    <td title="${esc(p.name)}"><a href="#" class="position-link" data-isin="${safeIsin}" data-name="${safeName}">${esc(p.name)}</a></td>
+    <td><code>${esc(p.isin)}</code>${externalLinks(p.isin)}</td>
     <td class="num">${fmtQty(p.quantity, p.category)}</td>
     <td class="num"><strong>${fmtEUR(p.net_value_eur)}</strong></td>
     <td class="num ${plCls}">${fmtEUR(p.pl_eur)}</td>
@@ -1548,8 +1553,8 @@ function openPositionModal(isin, name) {
       </div>
     </div>
     <div class="pm-meta">
-      Category: <strong>${pos.category || 'unknown'}</strong>
-      · ISIN: <code>${isin}</code>
+      Category: <strong>${pos.category ? esc(pos.category) : 'unknown'}</strong>
+      · ISIN: <code>${esc(isin)}</code>
     </div>
     <p class="pm-tip">
       Click the buttons below to open external research in a new tab.
@@ -1600,7 +1605,7 @@ function renderConcentrationWarnings(data) {
   const top = [...positions].sort((a, b) => b.net_value_eur - a.net_value_eur)[0];
   if (top && top.net_value_eur / depot > 0.20) {
     const pct = (top.net_value_eur / depot * 100).toFixed(1);
-    warnings.push(`<strong>${top.name}</strong> is <strong>${pct}%</strong> of your depot ` +
+    warnings.push(`<strong>${esc(top.name)}</strong> is <strong>${pct}%</strong> of your depot ` +
                   `(${fmtEUR(top.net_value_eur)}). A single position above 20% means a bad week ` +
                   `for it moves your whole portfolio noticeably.`);
   }
@@ -1621,7 +1626,7 @@ function renderConcentrationWarnings(data) {
     const share = b.net_value_eur / depot;
     if (share > 0.90 && Object.keys(buckets).length > 1 && key !== 'others') {
       const pct = (share * 100).toFixed(0);
-      warnings.push(`<strong>${pct}%</strong> of your depot is in <strong>${key}</strong>. ` +
+      warnings.push(`<strong>${pct}%</strong> of your depot is in <strong>${esc(key)}</strong>. ` +
                     `Cross-asset diversification (e.g. some bonds against equity) reduces drawdowns ` +
                     `in market stress.`);
     }

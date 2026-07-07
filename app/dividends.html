@@ -342,6 +342,10 @@ let state = {
 // Same behaviour: "€1.23" / "−€1.23" — minus on negatives, no sign on
 // positives. The local declaration predated _shared.js and lingered.
 const fmtEur = fmtEURWithMinus;
+// HTML-escape broker-supplied strings before innerHTML interpolation
+// (self-XSS hardening). Defined locally: this page doesn't load
+// _shared.js (its top-level const monthKey/monthLabel would collide).
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 const monthKey = (isoDate) => isoDate ? isoDate.slice(0, 7) : '';
 const monthLabel = (key) => {
   if (!key) return '';
@@ -596,8 +600,8 @@ function renderTable() {
   }
   let html = visible.map(p => `<tr>
       <td>${formatDate(p.date)}</td>
-      <td class="ticker">${p.name || '—'}</td>
-      <td class="tx-isin">${p.isin || '—'}</td>
+      <td class="ticker">${p.name ? esc(p.name) : '—'}</td>
+      <td class="tx-isin">${p.isin ? esc(p.isin) : '—'}</td>
       <td>${kindPill(p)}</td>
       <td class="num">${fmtEur(p.amount || 0)}</td>
     </tr>`).join('');

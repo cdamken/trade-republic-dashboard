@@ -303,9 +303,9 @@ function renderTable() {
     const pill = r.Type === 'Buy' ? 'side-buy' : 'side-sell';
     return `<tr>
       <td>${fmtDate(r.Date)}</td>
-      <td>${(r.Note || '').replace(/</g, '&lt;')}</td>
-      <td class="isin">${r.ISIN || ''}</td>
-      <td><span class="side-pill ${pill}">${r.Type}</span></td>
+      <td>${esc(r.Note)}</td>
+      <td class="isin">${esc(r.ISIN)}</td>
+      <td><span class="side-pill ${pill}">${esc(r.Type)}</span></td>
       <td class="num">${fmtEUR(r._abs)}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="5" class="empty">No trades match the filters.</td></tr>';

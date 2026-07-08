@@ -329,9 +329,9 @@ function renderTable() {
     const amtCls = r._value >= 0 ? 'green' : 'red';
     return `<tr>
       <td>${fmtDate(r.Date)}</td>
-      <td><span class="cat-pill ${cls}">${r.Type}</span></td>
-      <td>${(r.Note || '').replace(/</g, '&lt;')}</td>
-      <td class="isin">${r.ISIN || ''}</td>
+      <td><span class="cat-pill ${cls}">${esc(r.Type)}</span></td>
+      <td>${esc(r.Note)}</td>
+      <td class="isin">${esc(r.ISIN)}</td>
       <td class="num ${amtCls}">${fmtSignedEUR(r._value)}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="5" class="empty">No events match the filters.</td></tr>';

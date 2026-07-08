@@ -58,6 +58,14 @@ function fmtDate(iso) {
   });
 }
 
+// ----------------------------------------------------------------------
+// HTML escaping — for interpolating broker/user-supplied strings
+// (instrument names, ISINs, notes, account nicknames, ids, event types)
+// into innerHTML builders. Prevents self-XSS. Numbers we format
+// ourselves (fmtEUR etc.) do NOT need escaping.
+// ----------------------------------------------------------------------
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+
 const monthKey = (iso) => (iso || '').slice(0, 7);
 
 function monthLabel(k) {
